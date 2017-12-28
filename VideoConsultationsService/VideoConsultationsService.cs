@@ -39,7 +39,7 @@ namespace VideoConsultationsService {
 
 		private static void Start() {
 			LoggingSystem.LogMessageToFile("Starting, cycle interval in seconds: " +
-				Properties.Settings.Default.updatePeriodInSeconds);
+				Properties.Settings.Default.UpdatePeriodInSeconds);
 
 			EventSystem eventSystem = new EventSystem();
 			Thread thread = new Thread(eventSystem.CheckForNewEvents);
@@ -48,7 +48,6 @@ namespace VideoConsultationsService {
 
 		private static void Stop() {
 			LoggingSystem.LogMessageToFile("Stopping");
-			Environment.Exit(0);
 		}
 	}
 }

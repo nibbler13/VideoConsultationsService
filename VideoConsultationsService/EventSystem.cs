@@ -10,18 +10,18 @@ namespace VideoConsultationsService {
 	class EventSystem {
 		private TrueConf trueConf = new TrueConf();
 		private FBClient fbClient = new FBClient(
-			Properties.Settings.Default.fbMisAddress,
-			Properties.Settings.Default.fbMisName);
+			Properties.Settings.Default.FbMisAddress,
+			Properties.Settings.Default.FbMisName);
 		
 		private int previousDay;
 		private uint errorTrueConfCount = 0;
 		private uint errorMisFbCount = 0;
 		private bool mailSystemErrorSendedToStp = false;
 		private bool fbClientErrorSendedToStp = false;
-		private List<string> notificatedWebinars = new List<string>();
-		private List<string> notificatedScheduleEvents = new List<string>();
-		private List<string> notificatedRemindersEvents = new List<string>();
-		private List<string> notificatedRemindersDocsEvents = new List<string>();
+		private List<string> sendedEarlierWebinars = new List<string>();
+		private List<string> sendedEarlierScheduleEvents = new List<string>();
+		private List<string> sendedEarlierRemindersEvents = new List<string>();
+		private List<string> sendedEarlierRemindersDocsEvents = new List<string>();
 
 		/* новая запись в расписании от сегодня и вперед */
 		private string sqlQueryGetNewSchedule =
@@ -111,7 +111,7 @@ namespace VideoConsultationsService {
 		}
 
 		public void CheckForNewEvents() {
-			Timer timer = new Timer(Properties.Settings.Default.updatePeriodInSeconds * 1000);
+			Timer timer = new Timer(Properties.Settings.Default.UpdatePeriodInSeconds * 1000);
 			timer.Elapsed += Timer_Elapsed;
 			timer.AutoReset = true;
 			timer.Start();
@@ -123,10 +123,10 @@ namespace VideoConsultationsService {
 				LoggingSystem.LogMessageToFile("Обнуление списка уведомлений");
 
 				foreach (List<string> list in new List<string>[] {
-					notificatedWebinars,
-					notificatedScheduleEvents,
-					notificatedRemindersEvents,
-					notificatedRemindersDocsEvents})
+					sendedEarlierWebinars,
+					sendedEarlierScheduleEvents,
+					sendedEarlierRemindersEvents,
+					sendedEarlierRemindersDocsEvents})
 					if (list.Count > 10)
 						list.RemoveRange(0, list.Count - 10);
 
@@ -150,7 +150,7 @@ namespace VideoConsultationsService {
 					DateTime creationTime = webinar.UnixTimeStampToDateTime();
 					int minutesDelta = (int)creationTime.Subtract(DateTime.Now).TotalMinutes;
 
-					if (!notificatedWebinars.Contains(webinar.id))
+					if (!sendedEarlierWebinars.Contains(webinar.id))
 						if (minutesDelta <= 5 && minutesDelta >= 4)
 							SendReminder(webinar);
 
@@ -167,7 +167,7 @@ namespace VideoConsultationsService {
 
 			if (errorTrueConfCount > 1000 && !mailSystemErrorSendedToStp) {
 				LoggingSystem.LogMessageToFile("Отправка заявки в СТП");
-				string sendResult = SmsSystem.SendMessageToStp(true, false);
+				string sendResult = MailSystem.SendErrorMessageToStp(MailSystem.ErrorType.TrueConf);
 				if (string.IsNullOrEmpty(sendResult)) {
 					mailSystemErrorSendedToStp = true;
 				} else {
@@ -222,18 +222,29 @@ namespace VideoConsultationsService {
 						continue;
 					}
 
-					if (values.Key.Equals("Назначения"))
-						SendEventSMS(SmsSystem.SendScheduleNotification, schedID, mobileNumber, dateTime, ref notificatedScheduleEvents);
-					if (values.Key.Equals("Напоминания"))
-						SendEventSMS(SmsSystem.SendReminder, schedID, mobileNumber, dateTime, ref notificatedRemindersEvents);
-					if (values.Key.Equals("НапоминанияДоктора"))
-						SendEventSMS(SmsSystem.SendReminderForDocs, schedID, mobileNumber, dateTime, ref notificatedRemindersDocsEvents);
+					if (values.Key.Equals("Назначения")) {
+						string message = Properties.Settings.Default.MessageNewAppointment;
+						message = message.Replace("@dateTime", dateTime.ToString("HH:mm dd.MM.yyyy"));
+
+						SendEventSMS(message, mobileNumber, schedID, ref sendedEarlierScheduleEvents);
+					}
+
+					if (values.Key.Equals("Напоминания")) {
+						string message = Properties.Settings.Default.MessageReminderPatient;
+						SendEventSMS(message, mobileNumber, schedID, ref sendedEarlierRemindersEvents);
+					}
+
+					if (values.Key.Equals("НапоминанияДоктора")) {
+						string message = Properties.Settings.Default.MessageReminderDoctor;
+						message = message.Replace("@time", dateTime.ToString("HH:mm"));
+						SendEventSMS(message, mobileNumber, schedID, ref sendedEarlierRemindersDocsEvents);
+					}
 				}
 			}
 
 			if (errorMisFbCount > 1000 && !fbClientErrorSendedToStp) {
 				LoggingSystem.LogMessageToFile("Отправка заявки в СТП");
-				string sendResult = SmsSystem.SendMessageToStp(false, true);
+				string sendResult = MailSystem.SendErrorMessageToStp(MailSystem.ErrorType.FireBird);
 				if (string.IsNullOrEmpty(sendResult)) {
 					fbClientErrorSendedToStp = true;
 				} else {
@@ -242,24 +253,18 @@ namespace VideoConsultationsService {
 			}
 		}
 
-		private void SendEventSMS(
-			Func<string, DateTime, string> sendFunction, 
-			string schedId, 
-			string mobileNumber,
-			DateTime dateTime,
-			ref List<string> notificatedList) {
-
-			if (notificatedList.Contains(schedId))
+		private void SendEventSMS(string message, string mobileNumber, string schedId, ref List<string> sendedEarlier) {
+			if (sendedEarlier.Contains(schedId))
 				return;
 
-			string sendResult = sendFunction(mobileNumber, dateTime);
-			if (!string.IsNullOrEmpty(sendResult)) {
+			ItemSendResult sendResult = SvyaznoyZagruzka.SendMessage(mobileNumber, message).Result;
+			if (!sendResult.IsSuccessStatusCode) {
 				LoggingSystem.LogMessageToFile("Не удалось отправить СМС: " + sendResult);
 				return;
 			}
 
-			LoggingSystem.LogMessageToFile("Отправлено успешно");
-			notificatedList.Add(schedId);
+			LoggingSystem.LogMessageToFile("Отправлено успешно, идентификатор: " + sendResult.MessageId);
+			sendedEarlier.Add(schedId);
 		}
 
 		private DateTime GetDateTime(DataRow row) {
@@ -338,14 +343,17 @@ namespace VideoConsultationsService {
 				return;
 			}
 
-			string sendResult = SmsSystem.SendReminder(phoneNumber, dateTime);
-			if (string.IsNullOrEmpty(sendResult)) {
-				LoggingSystem.LogMessageToFile("Отправлено успешно");
-				notificatedWebinars.Add(webinar.id);
+			string message = Properties.Settings.Default.MessageNewAppointment;
+			message = message.Replace("@dateTime", dateTime.ToString("HH:mm dd.MM.yyyy"));
+			
+			ItemSendResult sendResult = SvyaznoyZagruzka.SendMessage(phoneNumber, message).Result;
+			if (!sendResult.IsSuccessStatusCode) {
+				LoggingSystem.LogMessageToFile("Не удалось отправить смс: " + sendResult);
 				return;
 			}
 
-			LoggingSystem.LogMessageToFile("Не удалось отправить смс: " + sendResult);
+			LoggingSystem.LogMessageToFile("Отправлено успешно, идентификатор: " + sendResult.MessageId);
+			sendedEarlierWebinars.Add(webinar.id);
 		}
 	}
 }
