@@ -111,13 +111,13 @@ namespace VideoConsultationsService {
 		}
 
 		public void CheckForNewEvents() {
-			Timer timer = new Timer(Properties.Settings.Default.UpdatePeriodInSeconds * 1000);
-			timer.Elapsed += Timer_Elapsed;
-			timer.AutoReset = true;
-			timer.Start();
+			Timer timerNewEvents = new Timer(Properties.Settings.Default.UpdatePeriodInSeconds * 1000);
+			timerNewEvents.Elapsed += TimerNewEvents_Elapsed;
+			timerNewEvents.AutoReset = true;
+			timerNewEvents.Start();
 		}
 
-		private void Timer_Elapsed(object sender, ElapsedEventArgs e) {
+		private void TimerNewEvents_Elapsed(object sender, ElapsedEventArgs e) {
 			Console.WriteLine("---Timer_Elapsed");
 			if (previousDay != DateTime.Now.Day) {
 				LoggingSystem.LogMessageToFile("Обнуление списка уведомлений");
@@ -354,6 +354,58 @@ namespace VideoConsultationsService {
 
 			LoggingSystem.LogMessageToFile("Отправлено успешно, идентификатор: " + sendResult.MessageId);
 			sendedEarlierWebinars.Add(webinar.id);
+		}
+
+
+
+		public void CheckTrueconfServerState() {
+			Timer timerCheckState = new Timer(Properties.Settings.Default.CheckStatePeriodInMinutes * 60 * 1000);
+			timerCheckState.Elapsed += TimerCheckState_Elapsed;
+			timerCheckState.AutoReset = true;
+			timerCheckState.Start();
+			TimerCheckState_Elapsed(null, null);
+		}
+
+		private async void TimerCheckState_Elapsed(object sender, ElapsedEventArgs e) {
+			LoggingSystem.LogMessageToFile("Проверка состояния сервера TrueConf");
+			string errorMessage = string.Empty;
+			try {
+				DateTime epoch = new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+				long unixDateTime = (long)(DateTime.Now.AddMinutes(10).ToUniversalTime() - epoch).TotalSeconds;
+				string timestamp = unixDateTime.ToString();
+				LoggingSystem.LogMessageToFile("Создание тестового вебинара");
+				Webinar webinar = await trueConf.CreateNewWebinar("state_check", "nn-admin@ruh93.trueconf.name", timestamp);
+				LoggingSystem.LogMessageToFile("Вебинар создан, ID:" + webinar.id);
+				LoggingSystem.LogMessageToFile("Получение списка всех вебинаров");
+				Dictionary<string, Webinar> webinars = await trueConf.GetAllWebinars();
+				LoggingSystem.LogMessageToFile("Список вебинаров содержит записей: " + webinars.Count);
+
+				if (!webinars.ContainsKey(webinar.id)) {
+					errorMessage = "Созданный вебинар (" + webinar.id + ") отсутствует в списке" + Environment.NewLine;
+					LoggingSystem.LogMessageToFile(errorMessage);
+				}
+
+				LoggingSystem.LogMessageToFile("Удаление тестового вебинара");
+				string deleteResult = await trueConf.DeleteWebinar(webinar.id);
+				LoggingSystem.LogMessageToFile("Результат удаления: " + deleteResult);
+
+				if (!deleteResult.Contains(webinar.id)) {
+					errorMessage += "Тестовый вебинар отсутствует в списке удаленных" + Environment.NewLine;
+					LoggingSystem.LogMessageToFile(errorMessage);
+				}
+			} catch (Exception exc) {
+				if (!string.IsNullOrEmpty(errorMessage))
+					errorMessage += Environment.NewLine;
+
+				errorMessage += exc.Message + Environment.NewLine + exc.StackTrace;
+				LoggingSystem.LogMessageToFile(errorMessage);
+			}
+
+			if (string.IsNullOrEmpty(errorMessage)) {
+				LoggingSystem.LogMessageToFile("Проверка выполнена успешно, ошибок не обнаружено");
+			} else {
+				MailSystem.SendErrorMessageToStp(MailSystem.ErrorType.CheckStateError, errorMessage);
+			}
 		}
 	}
 }

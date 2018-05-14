@@ -42,8 +42,11 @@ namespace VideoConsultationsService {
 				Properties.Settings.Default.UpdatePeriodInSeconds);
 
 			EventSystem eventSystem = new EventSystem();
-			Thread thread = new Thread(eventSystem.CheckForNewEvents);
-			thread.Start();
+			Thread threadNewEvents = new Thread(eventSystem.CheckForNewEvents);
+			threadNewEvents.Start();
+
+			Thread threadCheckState = new Thread(eventSystem.CheckTrueconfServerState);
+			threadCheckState.Start();
 		}
 
 		private static void Stop() {

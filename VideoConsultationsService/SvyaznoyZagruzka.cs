@@ -9,6 +9,7 @@ using System.Threading.Tasks;
 namespace VideoConsultationsService {
 	class SvyaznoyZagruzka {
 		public async static Task<ItemSendResult> SendMessage(string phoneNumber, string message, DateTime? dateTime = null) {
+			LoggingSystem.LogMessageToFile("Отправка СМС для абонента " + phoneNumber + " со следующим текстом: " + message);
 			ItemSendResult itemSendResult = new ItemSendResult();
 
 			try {
