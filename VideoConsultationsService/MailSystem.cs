@@ -5,11 +5,11 @@ using System.Diagnostics;
 
 namespace VideoConsultationsService {
 	class MailSystem {
-		public enum ErrorType { FireBird, TrueConf, CheckStateError }
+		public enum ErrorType { FireBird, TrueConf, CheckStateError, SingleCheck }
 
 		public static string SendErrorMessageToStp (ErrorType errorType, string errorMessage = "") {
-			if (Debugger.IsAttached)
-				return string.Empty;
+			//if (Debugger.IsAttached)
+			//	return string.Empty;
 
 			try {
 				MailAddress to = new MailAddress(Properties.Settings.Default.MailStpAddress);
@@ -35,6 +35,12 @@ namespace VideoConsultationsService {
 						body += "В ходе проверки состояния сервера TrueConf возникла ошибка: " +
 							Environment.NewLine + errorMessage;
 						break;
+					case ErrorType.SingleCheck:
+						body = errorMessage;
+						to = new MailAddress(Properties.Settings.Default.MailToSingleCheck);
+						subject = "Результаты проверки сервера TrueConf - "  + 
+							(errorMessage.Contains("!") ? " Внимание! Обнаружены ошибки!" : "ошибок не обнаружено");
+						break;
 					default:
 						break;
 				}
@@ -52,7 +58,8 @@ namespace VideoConsultationsService {
 					message.Subject = subject;
 					message.Body = body;
 					if (!string.IsNullOrEmpty(Properties.Settings.Default.MailCopyAddresss))
-						message.CC.Add(Properties.Settings.Default.MailCopyAddresss);
+						foreach (string address in Properties.Settings.Default.MailCopyAddresss.Split(';'))
+							message.CC.Add(address);
 
 					SmtpClient client = new SmtpClient(Properties.Settings.Default.MailServer, 25);
 					client.UseDefaultCredentials = false;

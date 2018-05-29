@@ -12,10 +12,9 @@ namespace VideoConsultationsService {
 			string logFileName = AppDomain.CurrentDomain.BaseDirectory + "\\" + LOG_FILE_NAME.Replace("*", today);
 
 			try {
-				using (System.IO.StreamWriter sw = System.IO.File.AppendText(logFileName)) {
-					string logLine = System.String.Format("{0:G}: {1}", System.DateTime.Now, msg);
-					sw.WriteLine(logLine);
-				}
+				using (System.IO.StreamWriter sw = System.IO.File.AppendText(logFileName)) 
+					sw.WriteLine(ToLogFormat(msg));
+
 			} catch (Exception e) {
 				Console.WriteLine("Cannot write to log file: " + logFileName + " | " + e.Message + " | " + e.StackTrace);
 			}
@@ -37,6 +36,10 @@ namespace VideoConsultationsService {
 			} catch (Exception e) {
 				Console.WriteLine("Cannot delete old lig files: " + e.Message + " | " + e.StackTrace);
 			}
+		}
+
+		public static string ToLogFormat(string text, bool addNewLine = false) {
+			return System.String.Format("{0:G}: {1}", System.DateTime.Now, text) + (addNewLine ? Environment.NewLine : "");
 		}
 	}
 }

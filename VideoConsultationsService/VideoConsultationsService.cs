@@ -22,17 +22,22 @@ namespace VideoConsultationsService {
 			}
 		}
 
-		static void Main() {
+		static void Main(string[] args) {
 			if (!Environment.UserInteractive)
 				using (Service service = new Service())
 					ServiceBase.Run(service);
 			else {
-				Start();
+				if (args.Length == 1 && args[0].ToLower().Equals("CheckTrueConfServer".ToLower())) {
+					EventSystem eventSystem = new EventSystem();
+					eventSystem.CheckTrueConfServer(true);
+				} else {
+					Start();
 
-				Console.WriteLine("Press any key to stop...");
-				Console.ReadKey(true);
+					Console.WriteLine("Press any key to stop...");
+					Console.ReadKey(true);
 
-				Stop();
+					Stop();
+				}
 			}
 		}
 
@@ -45,7 +50,7 @@ namespace VideoConsultationsService {
 			Thread threadNewEvents = new Thread(eventSystem.CheckForNewEvents);
 			threadNewEvents.Start();
 
-			Thread threadCheckState = new Thread(eventSystem.CheckTrueconfServerState);
+			Thread threadCheckState = new Thread(eventSystem.CheckTrueconfServerStateByTimer);
 			threadCheckState.Start();
 		}
 
