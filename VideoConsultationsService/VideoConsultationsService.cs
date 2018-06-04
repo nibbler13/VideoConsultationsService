@@ -23,6 +23,7 @@ namespace VideoConsultationsService {
 		}
 
 		static void Main(string[] args) {
+			LoggingSystem.ToLogFormat("Запуск");
 			if (!Environment.UserInteractive)
 				using (Service service = new Service())
 					ServiceBase.Run(service);
@@ -48,9 +49,11 @@ namespace VideoConsultationsService {
 
 			EventSystem eventSystem = new EventSystem();
 			Thread threadNewEvents = new Thread(eventSystem.CheckForNewEvents);
+			threadNewEvents.IsBackground = true;
 			threadNewEvents.Start();
 
 			Thread threadCheckState = new Thread(eventSystem.CheckTrueconfServerStateByTimer);
+			threadCheckState.IsBackground = true;
 			threadCheckState.Start();
 		}
 

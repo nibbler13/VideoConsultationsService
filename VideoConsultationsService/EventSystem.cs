@@ -14,10 +14,13 @@ namespace VideoConsultationsService {
 			Properties.Settings.Default.FbMisName);
 		
 		private int previousDay;
+		private int previousDayTrueConfServer;
 		private uint errorTrueConfCount = 0;
+		private uint errorTrueConfServerCountByTimer = 0;
 		private uint errorMisFbCount = 0;
 		private bool mailSystemErrorSendedToStp = false;
 		private bool fbClientErrorSendedToStp = false;
+		private bool trueConfServerErrorSendedToStp = false;
 		private List<string> sendedEarlierWebinars = new List<string>();
 		private List<string> sendedEarlierScheduleEvents = new List<string>();
 		private List<string> sendedEarlierRemindersEvents = new List<string>();
@@ -108,6 +111,7 @@ namespace VideoConsultationsService {
 
 		public EventSystem() {
 			previousDay = DateTime.Now.Day;
+			previousDayTrueConfServer = previousDay;
 		}
 
 		public void CheckForNewEvents() {
@@ -367,6 +371,9 @@ namespace VideoConsultationsService {
 		}
 
 		public void TimerCheckState_Elapsed(object sender, ElapsedEventArgs e) {
+			if (previousDayTrueConfServer != DateTime.Now.Day)
+				trueConfServerErrorSendedToStp = false;
+
 			CheckTrueConfServer();
 		}
 
@@ -386,39 +393,64 @@ namespace VideoConsultationsService {
 				LoggingSystem.LogMessageToFile(currentMessage);
 				checkResult += LoggingSystem.ToLogFormat(currentMessage, true);
 
-				Webinar webinar = trueConf.CreateNewWebinar("state_check", "nn-admin@ruh93.trueconf.name", timestamp).Result;
-				currentMessage = "Вебинар создан, ID:" + webinar.id;
-				LoggingSystem.LogMessageToFile(currentMessage);
-				checkResult += LoggingSystem.ToLogFormat(currentMessage, true);
-
-				currentMessage = "Получение списка всех вебинаров";
-				LoggingSystem.LogMessageToFile(currentMessage);
-				checkResult += LoggingSystem.ToLogFormat(currentMessage, true);
-
-				Dictionary<string, Webinar> webinars = trueConf.GetAllWebinars().Result;
-				currentMessage = "Список вебинаров содержит записей: " + webinars.Count;
-				LoggingSystem.LogMessageToFile(currentMessage);
-				checkResult += LoggingSystem.ToLogFormat(currentMessage, true);
-
-				if (!webinars.ContainsKey(webinar.id)) {
-					errorMessage = "!!! Созданный вебинар (" + webinar.id + ") отсутствует в списке" + Environment.NewLine;
-					LoggingSystem.LogMessageToFile(errorMessage);
-					checkResult += LoggingSystem.ToLogFormat(errorMessage, true);
+				Webinar webinar = null;
+				try {
+					webinar = trueConf.CreateNewWebinar("state_check", "nn-admin@ruh93.trueconf.name", timestamp).Result;
+					currentMessage = "Вебинар создан, ID:" + webinar.id;
+					LoggingSystem.LogMessageToFile(currentMessage);
+					checkResult += LoggingSystem.ToLogFormat(currentMessage, true);
+				} catch (Exception e) {
+					string msg = e.Message + Environment.NewLine + e.StackTrace;
+					LoggingSystem.LogMessageToFile(msg);
+					checkResult += LoggingSystem.ToLogFormat(msg, true);
+					errorMessage += msg + Environment.NewLine;
 				}
 
-				currentMessage = "Удаление тестового вебинара";
-				LoggingSystem.LogMessageToFile(currentMessage);
-				checkResult += LoggingSystem.ToLogFormat(currentMessage, true);
+				if (webinar != null) {
+					currentMessage = "Получение списка всех вебинаров";
+					LoggingSystem.LogMessageToFile(currentMessage);
+					checkResult += LoggingSystem.ToLogFormat(currentMessage, true);
 
-				string deleteResult = trueConf.DeleteWebinar(webinar.id).Result;
-				currentMessage = "Результат удаления: " + deleteResult;
-				LoggingSystem.LogMessageToFile(currentMessage);
-				checkResult += LoggingSystem.ToLogFormat(currentMessage, true);
+					Dictionary<string, Webinar> webinars = null;
+					try {
+						webinars = trueConf.GetAllWebinars().Result;
+						currentMessage = "Список вебинаров содержит записей: " + webinars.Count;
+						LoggingSystem.LogMessageToFile(currentMessage);
+						checkResult += LoggingSystem.ToLogFormat(currentMessage, true);
 
-				if (!deleteResult.Contains(webinar.id)) {
-					errorMessage += "!!! Тестовый вебинар отсутствует в списке удаленных" + Environment.NewLine;
-					LoggingSystem.LogMessageToFile(errorMessage);
-					checkResult += LoggingSystem.ToLogFormat(errorMessage, true);
+						if (!webinars.ContainsKey(webinar.id)) {
+							errorMessage = "!!! Созданный вебинар (" + webinar.id + ") отсутствует в списке" + Environment.NewLine;
+							LoggingSystem.LogMessageToFile(errorMessage);
+							checkResult += LoggingSystem.ToLogFormat(errorMessage, true);
+						}
+					} catch (Exception excAllWebinar) {
+						string msgAllWebinar = excAllWebinar.Message + Environment.NewLine + excAllWebinar.StackTrace;
+						LoggingSystem.LogMessageToFile(msgAllWebinar);
+						checkResult += LoggingSystem.ToLogFormat(msgAllWebinar, true);
+						errorMessage += msgAllWebinar + Environment.NewLine;
+					}
+
+					currentMessage = "Удаление тестового вебинара";
+					LoggingSystem.LogMessageToFile(currentMessage);
+					checkResult += LoggingSystem.ToLogFormat(currentMessage, true);
+
+					try {
+						string deleteResult = trueConf.DeleteWebinar(webinar.id).Result;
+						currentMessage = "Результат удаления: " + deleteResult;
+						LoggingSystem.LogMessageToFile(currentMessage);
+						checkResult += LoggingSystem.ToLogFormat(currentMessage, true);
+						
+						if (!deleteResult.Contains(webinar.id)) {
+							errorMessage += "!!! Тестовый вебинар отсутствует в списке удаленных" + Environment.NewLine;
+							LoggingSystem.LogMessageToFile(errorMessage);
+							checkResult += LoggingSystem.ToLogFormat(errorMessage, true);
+						}
+					} catch (Exception excDelete) {
+						string msgDelete = excDelete.Message + Environment.NewLine + excDelete.StackTrace;
+						LoggingSystem.LogMessageToFile(msgDelete);
+						checkResult += LoggingSystem.ToLogFormat(msgDelete, true);
+						errorMessage += msgDelete + Environment.NewLine;
+					}
 				}
 			} catch (Exception exc) {
 				if (!string.IsNullOrEmpty(errorMessage))
@@ -433,12 +465,24 @@ namespace VideoConsultationsService {
 				currentMessage = "--- Проверка выполнена успешно, ошибок не обнаружено";
 				LoggingSystem.LogMessageToFile(currentMessage);
 				checkResult += LoggingSystem.ToLogFormat(currentMessage);
+				errorTrueConfServerCountByTimer = 0;
 			} else {
-				MailSystem.SendErrorMessageToStp(MailSystem.ErrorType.CheckStateError, errorMessage);
+				errorTrueConfServerCountByTimer++;
+
+				if (errorTrueConfServerCountByTimer < 3) {
+					LoggingSystem.LogMessageToFile("Ошибка проявилась менее 3 раз подряд, пропуск отправки заявки");
+				} else if (trueConfServerErrorSendedToStp) {
+					LoggingSystem.LogMessageToFile("Сообщение об ошибке было отправлено ранее");
+				} else {
+					MailSystem.SendErrorMessageToStp(MailSystem.ErrorType.CheckStateError, errorMessage);
+					trueConfServerErrorSendedToStp = true;
+				}
 			}
 
 			if (isSingleCheck)
 				MailSystem.SendErrorMessageToStp(MailSystem.ErrorType.SingleCheck, checkResult);
+
+			previousDayTrueConfServer = DateTime.Now.Day;
 		}
 	}
 }
