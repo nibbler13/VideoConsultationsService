@@ -6,10 +6,13 @@ using FirebirdSql.Data.FirebirdClient;
 namespace VideoConsultationsService {
     class FBClient {
         private FbConnection connection;
+		private bool isZabbixCheck;
 
-		public FBClient(string ipAddress, string baseName) {
+		public FBClient(string ipAddress, string baseName, bool isZabbixCheck = false) {
+			this.isZabbixCheck = isZabbixCheck;
+
 			LoggingSystem.LogMessageToFile("Создание подключения к базе FB: " + 
-				ipAddress + ":" + baseName);
+				ipAddress + ":" + baseName, !isZabbixCheck);
 
 			FbConnectionStringBuilder cs = new FbConnectionStringBuilder();
             cs.DataSource = ipAddress;
@@ -40,7 +43,7 @@ namespace VideoConsultationsService {
 				sendedToStp = false;
 			} catch (Exception e) {
 				LoggingSystem.LogMessageToFile("Не удалось получить данные, запрос: " + query + 
-					Environment.NewLine + e.Message + " @ " + e.StackTrace);
+					Environment.NewLine + e.Message + " @ " + e.StackTrace, !isZabbixCheck);
 				errorCounter++;
 			} finally {
 				connection.Close();
@@ -63,7 +66,7 @@ namespace VideoConsultationsService {
 				updated = update.ExecuteNonQuery() > 0 ? true : false;
 			} catch (Exception e) {
 				LoggingSystem.LogMessageToFile("Не удалось выполнить запрос: " + query + 
-					Environment.NewLine + e.Message + " @ " + e.StackTrace);
+					Environment.NewLine + e.Message + " @ " + e.StackTrace, !isZabbixCheck);
 			} finally {
 				connection.Close();
 			}

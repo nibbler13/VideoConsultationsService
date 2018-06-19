@@ -9,9 +9,8 @@ using System.Timers;
 namespace VideoConsultationsService {
 	class EventSystem {
 		private TrueConf trueConf = new TrueConf();
-		private FBClient fbClient = new FBClient(
-			Properties.Settings.Default.FbMisAddress,
-			Properties.Settings.Default.FbMisName);
+		private FBClient fbClient;
+		private bool isZabbixCheck;
 		
 		private int previousDay;
 		private int previousDayTrueConfServer;
@@ -109,9 +108,14 @@ namespace VideoConsultationsService {
 		//992092956 - Телемедицина (неврология)
 		//764		- Педиатрия
 
-		public EventSystem() {
+		public EventSystem(bool isZabbixCheck = false) {
+			this.isZabbixCheck = isZabbixCheck;
 			previousDay = DateTime.Now.Day;
 			previousDayTrueConfServer = previousDay;
+			fbClient = new FBClient(
+				Properties.Settings.Default.FbMisAddress,
+				Properties.Settings.Default.FbMisName,
+				isZabbixCheck);
 		}
 
 		public void CheckForNewEvents() {
@@ -381,7 +385,7 @@ namespace VideoConsultationsService {
 			string checkResult = string.Empty;
 
 			string currentMessage = "--- Проверка состояния сервера TrueConf";
-			LoggingSystem.LogMessageToFile(currentMessage);
+			LoggingSystem.LogMessageToFile(currentMessage, !isZabbixCheck);
 			checkResult += LoggingSystem.ToLogFormat(currentMessage, true);
 			string errorMessage = string.Empty;
 			try {
@@ -390,64 +394,64 @@ namespace VideoConsultationsService {
 				string timestamp = unixDateTime.ToString();
 
 				currentMessage = "Создание тестового вебинара";
-				LoggingSystem.LogMessageToFile(currentMessage);
+				LoggingSystem.LogMessageToFile(currentMessage, !isZabbixCheck);
 				checkResult += LoggingSystem.ToLogFormat(currentMessage, true);
 
 				Webinar webinar = null;
 				try {
 					webinar = trueConf.CreateNewWebinar("state_check", "nn-admin@ruh93.trueconf.name", timestamp).Result;
 					currentMessage = "Вебинар создан, ID:" + webinar.id;
-					LoggingSystem.LogMessageToFile(currentMessage);
+					LoggingSystem.LogMessageToFile(currentMessage, !isZabbixCheck);
 					checkResult += LoggingSystem.ToLogFormat(currentMessage, true);
 				} catch (Exception e) {
 					string msg = e.Message + Environment.NewLine + e.StackTrace;
-					LoggingSystem.LogMessageToFile(msg);
+					LoggingSystem.LogMessageToFile(msg, !isZabbixCheck);
 					checkResult += LoggingSystem.ToLogFormat(msg, true);
 					errorMessage += msg + Environment.NewLine;
 				}
 
 				if (webinar != null) {
 					currentMessage = "Получение списка всех вебинаров";
-					LoggingSystem.LogMessageToFile(currentMessage);
+					LoggingSystem.LogMessageToFile(currentMessage, !isZabbixCheck);
 					checkResult += LoggingSystem.ToLogFormat(currentMessage, true);
 
 					Dictionary<string, Webinar> webinars = null;
 					try {
 						webinars = trueConf.GetAllWebinars().Result;
 						currentMessage = "Список вебинаров содержит записей: " + webinars.Count;
-						LoggingSystem.LogMessageToFile(currentMessage);
+						LoggingSystem.LogMessageToFile(currentMessage, !isZabbixCheck);
 						checkResult += LoggingSystem.ToLogFormat(currentMessage, true);
 
 						if (!webinars.ContainsKey(webinar.id)) {
 							errorMessage = "!!! Созданный вебинар (" + webinar.id + ") отсутствует в списке" + Environment.NewLine;
-							LoggingSystem.LogMessageToFile(errorMessage);
+							LoggingSystem.LogMessageToFile(errorMessage, !isZabbixCheck);
 							checkResult += LoggingSystem.ToLogFormat(errorMessage, true);
 						}
 					} catch (Exception excAllWebinar) {
 						string msgAllWebinar = excAllWebinar.Message + Environment.NewLine + excAllWebinar.StackTrace;
-						LoggingSystem.LogMessageToFile(msgAllWebinar);
+						LoggingSystem.LogMessageToFile(msgAllWebinar, !isZabbixCheck);
 						checkResult += LoggingSystem.ToLogFormat(msgAllWebinar, true);
 						errorMessage += msgAllWebinar + Environment.NewLine;
 					}
 
 					currentMessage = "Удаление тестового вебинара";
-					LoggingSystem.LogMessageToFile(currentMessage);
+					LoggingSystem.LogMessageToFile(currentMessage, !isZabbixCheck);
 					checkResult += LoggingSystem.ToLogFormat(currentMessage, true);
 
 					try {
 						string deleteResult = trueConf.DeleteWebinar(webinar.id).Result;
 						currentMessage = "Результат удаления: " + deleteResult;
-						LoggingSystem.LogMessageToFile(currentMessage);
+						LoggingSystem.LogMessageToFile(currentMessage, !isZabbixCheck);
 						checkResult += LoggingSystem.ToLogFormat(currentMessage, true);
 						
 						if (!deleteResult.Contains(webinar.id)) {
 							errorMessage += "!!! Тестовый вебинар отсутствует в списке удаленных" + Environment.NewLine;
-							LoggingSystem.LogMessageToFile(errorMessage);
+							LoggingSystem.LogMessageToFile(errorMessage, !isZabbixCheck);
 							checkResult += LoggingSystem.ToLogFormat(errorMessage, true);
 						}
 					} catch (Exception excDelete) {
 						string msgDelete = excDelete.Message + Environment.NewLine + excDelete.StackTrace;
-						LoggingSystem.LogMessageToFile(msgDelete);
+						LoggingSystem.LogMessageToFile(msgDelete, !isZabbixCheck);
 						checkResult += LoggingSystem.ToLogFormat(msgDelete, true);
 						errorMessage += msgDelete + Environment.NewLine;
 					}
@@ -457,26 +461,32 @@ namespace VideoConsultationsService {
 					errorMessage += Environment.NewLine;
 
 				errorMessage += exc.Message + Environment.NewLine + exc.StackTrace;
-				LoggingSystem.LogMessageToFile(errorMessage);
+				LoggingSystem.LogMessageToFile(errorMessage, !isZabbixCheck);
 				checkResult += LoggingSystem.ToLogFormat(errorMessage, true);
 			}
 
 			if (string.IsNullOrEmpty(errorMessage)) {
 				currentMessage = "--- Проверка выполнена успешно, ошибок не обнаружено";
-				LoggingSystem.LogMessageToFile(currentMessage);
+				LoggingSystem.LogMessageToFile(currentMessage, !isZabbixCheck);
 				checkResult += LoggingSystem.ToLogFormat(currentMessage);
 				errorTrueConfServerCountByTimer = 0;
+				
+				if (isZabbixCheck)
+					Console.WriteLine("0");
 			} else {
 				errorTrueConfServerCountByTimer++;
 
 				if (errorTrueConfServerCountByTimer < 3) {
-					LoggingSystem.LogMessageToFile("Ошибка проявилась менее 3 раз подряд, пропуск отправки заявки");
+					LoggingSystem.LogMessageToFile("Ошибка проявилась менее 3 раз подряд, пропуск отправки заявки", !isZabbixCheck);
 				} else if (trueConfServerErrorSendedToStp) {
-					LoggingSystem.LogMessageToFile("Сообщение об ошибке было отправлено ранее");
+					LoggingSystem.LogMessageToFile("Сообщение об ошибке было отправлено ранее", !isZabbixCheck);
 				} else {
 					MailSystem.SendErrorMessageToStp(MailSystem.ErrorType.CheckStateError, errorMessage);
 					trueConfServerErrorSendedToStp = true;
 				}
+
+				if (!isZabbixCheck)
+					Console.WriteLine("1");
 			}
 
 			if (isSingleCheck)

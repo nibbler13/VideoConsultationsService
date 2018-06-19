@@ -7,7 +7,7 @@ namespace VideoConsultationsService {
 		private const string LOG_FILE_NAME = "VideoConsultationsService_*.log";
 		private const int MAX_LOGFILES_QUANTITY = 7;
 
-		public static void LogMessageToFile(string msg) {
+		public static void LogMessageToFile(string msg, bool writeToConsole = true) {
 			string today = DateTime.Now.ToString("yyyyMMdd");
 			string logFileName = AppDomain.CurrentDomain.BaseDirectory + "\\" + LOG_FILE_NAME.Replace("*", today);
 
@@ -19,7 +19,9 @@ namespace VideoConsultationsService {
 				Console.WriteLine("Cannot write to log file: " + logFileName + " | " + e.Message + " | " + e.StackTrace);
 			}
 
-			Console.WriteLine(msg);
+			if (writeToConsole)
+				Console.WriteLine(msg);
+
 			CheckAndCleanOldFiles();
 		}
 

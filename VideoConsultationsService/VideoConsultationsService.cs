@@ -23,38 +23,46 @@ namespace VideoConsultationsService {
 		}
 
 		static void Main(string[] args) {
-			LoggingSystem.ToLogFormat("Запуск");
-			if (!Environment.UserInteractive)
-				using (Service service = new Service())
-					ServiceBase.Run(service);
-			else {
-				if (args.Length == 1 && args[0].ToLower().Equals("CheckTrueConfServer".ToLower())) {
+			if (args.Length == 1) {
+				string arg0 = args[0].ToLower();
+
+				if (arg0.Equals("CheckTrueConfServer".ToLower())) {
 					EventSystem eventSystem = new EventSystem();
 					eventSystem.CheckTrueConfServer(true);
-				} else {
-					Start();
-
-					Console.WriteLine("Press any key to stop...");
-					Console.ReadKey(true);
-
-					Stop();
+				} else if (arg0.Equals("zabbix")) {
+					EventSystem eventSystem = new EventSystem(true);
+					eventSystem.CheckTrueConfServer(false);
 				}
+			} else if (!Environment.UserInteractive) {
+				using (Service service = new Service())
+					ServiceBase.Run(service);
+			} else {
+				Start();
+
+				Console.WriteLine("Press any key to stop...");
+				Console.ReadKey(true);
+
+				Stop();
 			}
 		}
 
 
 		private static void Start() {
+			LoggingSystem.LogMessageToFile("Запуск");
 			LoggingSystem.LogMessageToFile("Starting, cycle interval in seconds: " +
 				Properties.Settings.Default.UpdatePeriodInSeconds);
 
 			EventSystem eventSystem = new EventSystem();
-			Thread threadNewEvents = new Thread(eventSystem.CheckForNewEvents);
-			threadNewEvents.IsBackground = true;
+
+			Thread threadNewEvents = new Thread(eventSystem.CheckForNewEvents) {
+				IsBackground = true
+			};
+
 			threadNewEvents.Start();
 
-			Thread threadCheckState = new Thread(eventSystem.CheckTrueconfServerStateByTimer);
-			threadCheckState.IsBackground = true;
-			threadCheckState.Start();
+			//Thread threadCheckState = new Thread(eventSystem.CheckTrueconfServerStateByTimer);
+			//threadCheckState.IsBackground = true;
+			//threadCheckState.Start();
 		}
 
 		private static void Stop() {
