@@ -6,7 +6,12 @@ using System.Threading.Tasks;
 using Newtonsoft.Json;
 
 namespace VideoConsultationsService {
-	class Webinar : Conference {
+	public class Webinars {
+		[JsonProperty("list")]
+		public Dictionary<string, Webinar> Dict { get; set; }
+	}
+
+	public class Webinar : Conference {
 		[JsonProperty("allow_guests_audio_video")]
 		public bool allowGuestsAudioVideo { get; set; }
 

@@ -6,7 +6,7 @@ using System.Text;
 using System.Threading.Tasks;
 
 namespace VideoConsultationsService {
-	class Conference {
+	public class Conference {
 		//Conference Structure
 		//Field					Type			Description
 		//id					string			uniqie identifier of conference
