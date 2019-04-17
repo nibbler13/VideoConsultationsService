@@ -22,7 +22,7 @@ namespace VideoConsultationsService {
 			}
 		}
 
-		static void Main(string[] args) {
+		static int Main(string[] args) {
 			if (args.Length == 1) {
 				string arg0 = args[0].ToLower();
 
@@ -31,7 +31,7 @@ namespace VideoConsultationsService {
 					eventSystem.CheckTrueConfServer(true);
 				} else if (arg0.Equals("zabbix")) {
 					EventSystem eventSystem = new EventSystem(true);
-					eventSystem.CheckTrueConfServer(false);
+					return eventSystem.CheckTrueConfServer(false);
 				}
 			} else if (!Environment.UserInteractive) {
 				using (Service service = new Service())
@@ -44,6 +44,8 @@ namespace VideoConsultationsService {
 
 				Stop();
 			}
+
+			return 0;
 		}
 
 

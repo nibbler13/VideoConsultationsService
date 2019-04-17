@@ -381,7 +381,7 @@ namespace VideoConsultationsService {
 			CheckTrueConfServer();
 		}
 
-		public void CheckTrueConfServer(bool isSingleCheck = false) {
+		public int CheckTrueConfServer(bool isSingleCheck = false) {
 			string checkResult = string.Empty;
 
 			string currentMessage = "--- Проверка состояния сервера TrueConf";
@@ -471,28 +471,38 @@ namespace VideoConsultationsService {
 				checkResult += LoggingSystem.ToLogFormat(currentMessage);
 				errorTrueConfServerCountByTimer = 0;
 				
-				if (isZabbixCheck)
+				if (isZabbixCheck) {
 					Console.WriteLine("0");
+					LoggingSystem.ToLogFormat("Результат проверки для Zabbix: 0");
+					return 0;
+				}
 			} else {
 				errorTrueConfServerCountByTimer++;
 
 				if (errorTrueConfServerCountByTimer < 3) {
 					LoggingSystem.LogMessageToFile("Ошибка проявилась менее 3 раз подряд, пропуск отправки заявки", !isZabbixCheck);
-				} else if (trueConfServerErrorSendedToStp) {
-					LoggingSystem.LogMessageToFile("Сообщение об ошибке было отправлено ранее", !isZabbixCheck);
 				} else {
-					MailSystem.SendErrorMessageToStp(MailSystem.ErrorType.CheckStateError, errorMessage);
-					trueConfServerErrorSendedToStp = true;
+					if (trueConfServerErrorSendedToStp) {
+						LoggingSystem.LogMessageToFile("Сообщение об ошибке было отправлено ранее", !isZabbixCheck);
+					} else {
+						MailSystem.SendErrorMessageToStp(MailSystem.ErrorType.CheckStateError, errorMessage);
+						trueConfServerErrorSendedToStp = true;
+					}
 				}
 
-				if (!isZabbixCheck)
+				if (isZabbixCheck) {
 					Console.WriteLine("1");
+					LoggingSystem.ToLogFormat("Результат проверки для Zabbix: 1");
+					return 1;
+				}
 			}
 
 			if (isSingleCheck)
 				MailSystem.SendErrorMessageToStp(MailSystem.ErrorType.SingleCheck, checkResult);
 
 			previousDayTrueConfServer = DateTime.Now.Day;
+
+			return 0;
 		}
 	}
 }
