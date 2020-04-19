@@ -3,11 +3,11 @@ using System.IO;
 using System.Linq;
 
 namespace VideoConsultationsService {
-	class LoggingSystem {
+	public class Logging {
 		private const string LOG_FILE_NAME = "VideoConsultationsService_*.log";
 		private const int MAX_LOGFILES_QUANTITY = 7;
 
-		public static void LogMessageToFile(string msg, bool writeToConsole = true) {
+		public static void ToLog(string msg, bool writeToConsole = true) {
 			string today = DateTime.Now.ToString("yyyyMMdd");
 			string logFileName = AppDomain.CurrentDomain.BaseDirectory + "\\" + LOG_FILE_NAME.Replace("*", today);
 

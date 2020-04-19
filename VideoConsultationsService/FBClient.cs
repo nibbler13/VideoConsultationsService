@@ -11,14 +11,14 @@ namespace VideoConsultationsService {
 		public FBClient(string ipAddress, string baseName, bool isZabbixCheck = false) {
 			this.isZabbixCheck = isZabbixCheck;
 
-			LoggingSystem.LogMessageToFile("Создание подключения к базе FB: " + 
+			Logging.ToLog("Создание подключения к базе FB: " + 
 				ipAddress + ":" + baseName, !isZabbixCheck);
 
 			FbConnectionStringBuilder cs = new FbConnectionStringBuilder();
             cs.DataSource = ipAddress;
             cs.Database = baseName;
-            cs.UserID = "SYSDBA";
-            cs.Password = "masterkey";
+            cs.UserID = Properties.Settings.Default.FbMisDbUser;
+            cs.Password = Properties.Settings.Default.FbMisDbPassword;
             cs.Charset = "NONE";
             cs.Pooling = false;
 
@@ -42,7 +42,7 @@ namespace VideoConsultationsService {
 				errorCounter = 0;
 				sendedToStp = false;
 			} catch (Exception e) {
-				LoggingSystem.LogMessageToFile("Не удалось получить данные, запрос: " + query + 
+				Logging.ToLog("Не удалось получить данные, запрос: " + query + 
 					Environment.NewLine + e.Message + " @ " + e.StackTrace, !isZabbixCheck);
 				errorCounter++;
 			} finally {
@@ -65,7 +65,7 @@ namespace VideoConsultationsService {
 
 				updated = update.ExecuteNonQuery() > 0 ? true : false;
 			} catch (Exception e) {
-				LoggingSystem.LogMessageToFile("Не удалось выполнить запрос: " + query + 
+				Logging.ToLog("Не удалось выполнить запрос: " + query + 
 					Environment.NewLine + e.Message + " @ " + e.StackTrace, !isZabbixCheck);
 			} finally {
 				connection.Close();

@@ -2,25 +2,20 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Reflection;
+using System.Net.Mime;
+using System.IO;
 
 namespace VideoConsultationsService {
 	class MailSystem {
 		public enum ErrorType { FireBird, TrueConf, CheckStateError, SingleCheck }
 
 		public static string SendErrorMessageToStp (ErrorType errorType, string errorMessage = "") {
-			//if (Debugger.IsAttached)
-			//	return string.Empty;
-
-			try {
-				MailAddress to = new MailAddress(Properties.Settings.Default.MailStpAddress);
-				MailAddress from = new MailAddress(
-					Properties.Settings.Default.MailUserName + "@" + 
-					Properties.Settings.Default.MailUserDomain, "TrueConfApiTest");
-
 				string subject = "Ошибки в работе VideoConsultationsSevice";
 				string body = "На группу бизнес-анализа" + Environment.NewLine;
 
-
+			try {
+				string address = Properties.Settings.Default.MailStpAddress;
 				switch (errorType) {
 					case ErrorType.FireBird:
 						body += "Сервису VideoConsultationsSevice не удалось корректно загрузить" +
@@ -37,7 +32,7 @@ namespace VideoConsultationsService {
 						break;
 					case ErrorType.SingleCheck:
 						body = errorMessage;
-						to = new MailAddress(Properties.Settings.Default.MailToSingleCheck);
+						address = Properties.Settings.Default.MailToSingleCheck;
 						subject = "Результаты проверки сервера TrueConf - "  + 
 							(errorMessage.Contains("!") ? " Внимание! Обнаружены ошибки!" : "ошибок не обнаружено");
 						break;
@@ -49,30 +44,113 @@ namespace VideoConsultationsService {
 					Environment.NewLine + "Просьба не отвечать на него" + Environment.NewLine +
 					 "Имя системы: " + Environment.MachineName;
 
-				LoggingSystem.LogMessageToFile("Отправка сообщения, тема: " + subject + ", текст: " + body);
-				
-				using (MailMessage message = new MailMessage()) {
-					message.To.Add(to);
-					message.From = from;
+				Logging.ToLog("Отправка сообщения, тема: " + subject + ", текст: " + body);
 
-					message.Subject = subject;
-					message.Body = body;
-					if (!string.IsNullOrEmpty(Properties.Settings.Default.MailCopyAddresss))
-						foreach (string address in Properties.Settings.Default.MailCopyAddresss.Split(';'))
-							message.CC.Add(address);
+				SendMail(subject, body, address);
 
-					SmtpClient client = new SmtpClient(Properties.Settings.Default.MailServer, 25);
-					client.UseDefaultCredentials = false;
-					client.Credentials = new System.Net.NetworkCredential(
-						Properties.Settings.Default.MailUserName,
-						Properties.Settings.Default.MailUserPassword,
-						Properties.Settings.Default.MailUserDomain);
-
-					client.Send(message);
-					return string.Empty;
-				}
+				return string.Empty;
 			} catch (Exception e) {
 				return e.Message + " " + e.StackTrace;
+			}
+		}
+
+
+		public static void SendMail(string subject, string body, string receiver, string[] attachmentsPath = null, bool addSignature = true) {
+			if (string.IsNullOrEmpty(receiver)) {
+				Logging.ToLog("В настройках не задан получатель письма");
+				return;
+			}
+
+			Logging.ToLog("Отправка письма с темой: " + subject);
+			Logging.ToLog("Текст: " + body);
+			Logging.ToLog("Получатели: " + receiver);
+
+			try {
+				string appName = Assembly.GetExecutingAssembly().GetName().Name;
+
+				MailAddress from = new MailAddress(
+					Properties.Settings.Default.MailUserName + "@" + 
+					Properties.Settings.Default.MailUserDomain,
+					appName);
+
+				List<MailAddress> mailAddressesTo = new List<MailAddress>();
+
+				if (receiver.Contains(";")) {
+					string[] receivers = receiver.Split(';');
+					foreach (string address in receivers)
+						mailAddressesTo.Add(new MailAddress(address));
+				} else
+					mailAddressesTo.Add(new MailAddress(receiver));
+
+				if (addSignature)
+					body += Environment.NewLine + Environment.NewLine +
+						"___________________________________________" + Environment.NewLine +
+						"Это автоматически сгенерированное сообщение" + Environment.NewLine +
+						"Просьба не отвечать на него" + Environment.NewLine +
+ 						"Имя системы: " + Environment.MachineName;
+
+				MailMessage message = new MailMessage();
+
+				foreach (MailAddress mailAddress in mailAddressesTo)
+					message.To.Add(mailAddress);
+
+				message.IsBodyHtml = body.Contains("<") && body.Contains(">");
+
+				if (message.IsBodyHtml)
+					body = body.Replace(Environment.NewLine, "<br>");
+
+				if (attachmentsPath != null)
+					foreach (string attachmentPath in attachmentsPath) {
+						if (string.IsNullOrEmpty(attachmentPath) || !File.Exists(attachmentPath))
+							continue;
+
+						Attachment attachment = new Attachment(attachmentPath, MediaTypeNames.Application.Octet);
+
+						if (message.IsBodyHtml && attachmentPath.EndsWith(".jpg")) {
+							attachment.ContentDisposition.Inline = true;
+
+							LinkedResource inline = new LinkedResource(attachmentPath, MediaTypeNames.Image.Jpeg);
+							inline.ContentId = Guid.NewGuid().ToString();
+
+							body = body.Replace("Фотография с камеры терминала:", "Фотография с камеры терминала:<br>" +
+								string.Format(@"<img src=""cid:{0}"" />", inline.ContentId));
+
+							AlternateView avHtml = AlternateView.CreateAlternateViewFromString(body, null, MediaTypeNames.Text.Html);
+							avHtml.LinkedResources.Add(inline);
+
+							message.AlternateViews.Add(avHtml);
+						} else
+							message.Attachments.Add(attachment);
+					}
+
+				message.From = from;
+				message.Subject = subject;
+				message.Body = body;
+
+				if (!string.IsNullOrEmpty(Properties.Settings.Default.MailCopyAddresss))
+					message.CC.Add(Properties.Settings.Default.MailCopyAddresss);
+
+				SmtpClient client = new SmtpClient(Properties.Settings.Default.MailServer, 587);
+				client.UseDefaultCredentials = false;
+				client.DeliveryMethod = SmtpDeliveryMethod.Network;
+				client.EnableSsl = false;
+				client.Credentials = new System.Net.NetworkCredential(
+					Properties.Settings.Default.MailUserName,
+					Properties.Settings.Default.MailUserPassword);
+
+				client.Send(message);
+				client.Dispose();
+
+				foreach (Attachment attach in message.Attachments)
+					attach.Dispose();
+
+				message.Dispose();
+				Logging.ToLog("Письмо отправлено успешно");
+			} catch (Exception e) {
+				Logging.ToLog("Не удалось отправить письмо:  " + Environment.NewLine + e.Message + Environment.NewLine + e.StackTrace);
+
+				if (e.InnerException != null)
+					Logging.ToLog(e.InnerException.Message + Environment.NewLine + e.InnerException.StackTrace);
 			}
 		}
 	}

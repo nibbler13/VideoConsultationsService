@@ -8,9 +8,9 @@ using System.Timers;
 
 namespace VideoConsultationsService {
 	class EventSystem {
-		private TrueConf trueConf = new TrueConf();
-		private FBClient fbClient;
-		private bool isZabbixCheck;
+		private readonly TrueConf trueConf;
+		private readonly FBClient fbClient;
+		private readonly bool isZabbixCheck;
 		
 		private int previousDay;
 		private int previousDayTrueConfServer;
@@ -24,9 +24,11 @@ namespace VideoConsultationsService {
 		private List<string> sendedEarlierScheduleEvents = new List<string>();
 		private List<string> sendedEarlierRemindersEvents = new List<string>();
 		private List<string> sendedEarlierRemindersDocsEvents = new List<string>();
+		private List<string> sendedEarlierNewPaymentNotification = new List<string>();
+		private List<string> sendedEarlierPayment30minNotification = new List<string>();
 
 		/* новая запись в расписании от сегодня и вперед */
-		private string sqlQueryGetNewSchedule =
+		private readonly string sqlQueryGetNewSchedule =
 			"SELECT " +
 			"	Cl.phone1, " +
 			"	Cl.phone2, " +
@@ -45,11 +47,11 @@ namespace VideoConsultationsService {
 			"	JOIN Doctor D ON D.DCode = Sh.DCode " +
 			"WHERE Sh.createdate >= current_date + DATEADD(minute, -10, current_time) " +
 			"	AND (Sh.emid IS NULL OR Sh.emid = 0) " +
-			"	AND Ds.DepNum IN (992092102, 992092953, 992092954, 992092955, 992092956, 764) " +
+			"	AND Ds.DepNum IN (992582623, 992582624, 992582625, 992582626, 992582628, 992092102, 992582680) " +
 			"	AND Sh.OnlineType = 1";
 
-		/* напоминание за 0-6 минут до начала */
-		private string sqlQueryGetNewNotifications = 
+		/* напоминание за 0-6 минут до начала пациентам*/
+		private readonly string sqlQueryGetNewNotifications = 
 			"SELECT " +
 			"	Cl.phone1, " +
 			"	Cl.phone2, " +
@@ -73,11 +75,11 @@ namespace VideoConsultationsService {
 			"	AND CAST(IIF (Sh.bhour< 10,0 || Sh.bhour, Sh.bhour) || ':' || " +
 			"		IIF (Sh.bmin< 10,0 || Sh.bmin, Sh.bmin) AS TIME) " +
 			"	AND (Sh.emid IS NULL OR Sh.emid = 0) " +
-			"	AND Ds.DepNum IN (992092102, 992092953, 992092954, 992092955, 992092956, 764) " +
+			"	AND Ds.DepNum IN (992582623, 992582624, 992582625, 992582626, 992582628, 992092102, 992582680) " +
 			"	AND Sh.OnlineType = 1";
 		
 		/* напоминание за 0-6 минут до начала докторам*/
-		private string sqlQueryGetNewNotificationsForDocs =
+		private readonly string sqlQueryGetNewNotificationsForDocs =
 			"SELECT " +
 			"	CAST(LPAD(EXTRACT(DAY FROM Sh.workdate), 2, '0') AS VARCHAR(2)) || '.' || " +
 			"	CAST(LPAD(EXTRACT(MONTH FROM Sh.workdate), 2, '0') AS VARCHAR(2)) || '.' || " +
@@ -99,23 +101,66 @@ namespace VideoConsultationsService {
 			"	AND CAST(IIF (Sh.bhour< 10,0 || Sh.bhour, Sh.bhour) || ':' || " +
 			"		IIF (Sh.bmin< 10,0 || Sh.bmin, Sh.bmin) AS TIME) " +
 			"	AND (Sh.emid IS NULL OR Sh.emid = 0) " +
-			"	AND Ds.DepNum IN (992092102, 992092953, 992092954, 992092955, 992092956)";
+			"	AND Ds.DepNum IN (992582623, 992582624, 992582625, 992582626, 992582628, 992092102, 992582680)";
 
-		//992092102 - ТЕЛЕМЕДИЦИНА
-		//992092953 - Телемедицина (терапия)
-		//992092954 - Телемедицина (кардиология)
-		//992092955 - Телемедицина (гинекология)
-		//992092956 - Телемедицина (неврология)
-		//764		- Педиатрия
+		//new
+		//992582623	Онлайн-консультация - гинекология
+		//992582624	Онлайн-консультация - кардиология
+		//992582625	Онлайн-консультация - неврология
+		//992582626	Онлайн-консультация - терапия
+		//992582628	Онлайн-консультация - оториноларингология
+		//992092102	Санитарно просветительская работа
+		//992582680 Педиатрия онлайн
+
+		//проверка наличия напоминаний об оплате
+		private const string sqlQueryGetPaymentNotifications = 
+			"select " +
+			"s.schedid, " +
+			"f.shortname, " +
+			"d.dname, " +
+			"s.workdate, " +
+			"lpad(dateadd(minute, S.BHOUR * 60 + S.BMIN, cast('00:00' as time)), 5) WORKTIME, " +
+			"c.fullname, " +
+			"c.histnum, " +
+			"c.bdate, " +
+			"c.phone3, " +
+			"c.phone2, " +
+			"c.phone1, " +
+			"s.createdate, " +
+			"p.SUMMARUB_DISC amount_payable, " +
+			"coalesce(pay.amountrub, 0) paid_by_client, " +
+			"coalesce(c.WEBPAYTYPE, 0) as webpaytype, " +
+			"coalesce(c.WEBACCESSTYPE, 0) as webaccesstype " +
+			"from schedule s " +
+			"join filials f on f.filid = s.filial " +
+			"join doctor d on d.dcode = s.dcode " +
+			"join clients c on c.pcode = s.pcode " +
+			"join doctshedule ds on ds.schedident = s.schedident and coaLESCE(ONLINEMODE, 0) = 1 " +
+			"join dailyplan p on p.did = s.planid and p.PLANTYPE = 204 " +
+			"left join ( " +
+			"select pcode, planid, cashid, sum(iif(typeoper in (2,5, 102),-amountrub,amountrub)) amountrub from ( " +
+			"  select PCode, paydate, DCode, iif(PayCode = 5, 2, 1) typeoper, cashid, planid, AmountRub from Incom " +
+			"  where PayCode in (1,3) or (PayCode = 5 and IncRef not in (10,11)) " +
+			"union all select PCode, lcdate, DCode, 1 TypeOper, cashid, planid, AmountRub from LoseCredit " +
+			"union all select PCode, pmdate, DCode, 2 TypeOper, cashID, planid, AmountRub from JPPayments " +
+			"  where OperType = 5 and (not IncRef  in (10, 11)) " +
+			"union all select PCode, paydate, DCode,  TypeOper, cashid, planid, AmountRub from ClAvans) group by 1,2,3) pay on pay.planid = s.planid and pay.pcode = s.pcode " +
+			"where s.workdate = current_date";
+
 
 		public EventSystem(bool isZabbixCheck = false) {
+			trueConf = new TrueConf();
 			this.isZabbixCheck = isZabbixCheck;
 			previousDay = DateTime.Now.Day;
 			previousDayTrueConfServer = previousDay;
+
 			fbClient = new FBClient(
 				Properties.Settings.Default.FbMisAddress,
 				Properties.Settings.Default.FbMisName,
 				isZabbixCheck);
+
+			if (isZabbixCheck)
+				Logging.ToLog("Проверка Zabbix");
 		}
 
 		public void CheckForNewEvents() {
@@ -123,18 +168,21 @@ namespace VideoConsultationsService {
 			timerNewEvents.Elapsed += TimerNewEvents_Elapsed;
 			timerNewEvents.AutoReset = true;
 			timerNewEvents.Start();
+
+			TimerNewEvents_Elapsed(timerNewEvents, null);
 		}
 
 		private void TimerNewEvents_Elapsed(object sender, ElapsedEventArgs e) {
-			Console.WriteLine("---Timer_Elapsed");
 			if (previousDay != DateTime.Now.Day) {
-				LoggingSystem.LogMessageToFile("Обнуление списка уведомлений");
+				Logging.ToLog("Обнуление списка уведомлений");
 
 				foreach (List<string> list in new List<string>[] {
 					sendedEarlierWebinars,
 					sendedEarlierScheduleEvents,
 					sendedEarlierRemindersEvents,
-					sendedEarlierRemindersDocsEvents})
+					sendedEarlierRemindersDocsEvents,
+					sendedEarlierNewPaymentNotification,
+					sendedEarlierPayment30minNotification})
 					if (list.Count > 10)
 						list.RemoveRange(0, list.Count - 10);
 
@@ -146,60 +194,51 @@ namespace VideoConsultationsService {
 		}
 
 		private void CheckTrueConfEvents() {
-			LoggingSystem.LogMessageToFile("---Проверка сервера TrueConf");
+			Logging.ToLog("---Проверка сервера TrueConf");
 			try {
-				Dictionary<string, Webinar> webinars = trueConf.GetAllWebinars().Result;
-				LoggingSystem.LogMessageToFile("Количество существующих вебинаров: " + webinars.Count);
-				foreach (KeyValuePair<string, Webinar> pair in webinars) {
-					Webinar webinar = pair.Value;
-					if (webinar.invitationTimestamp == 0)
-						continue;
-
-					DateTime creationTime = webinar.UnixTimeStampToDateTime();
-					int minutesDelta = (int)creationTime.Subtract(DateTime.Now).TotalMinutes;
-
-					if (!sendedEarlierWebinars.Contains(webinar.id))
-						if (minutesDelta <= 5 && minutesDelta >= 4)
-							SendReminder(webinar);
-
-					if (creationTime.Subtract(DateTime.Now).TotalMinutes <= -30)
-						DeleteWebinar(webinar);
-
-					errorTrueConfCount = 0;
-					mailSystemErrorSendedToStp = false;
-				}
+				List<ObjectConference> conferenceList = trueConf.GetConferenceList().Result;
+				Logging.ToLog("Количество существующих вебинаров: " + conferenceList.Count);
+				errorTrueConfCount = 0;
+				mailSystemErrorSendedToStp = false;
 			} catch (Exception exception) {
-				LoggingSystem.LogMessageToFile("Не удалось получить данные с сервера TrueConf: " + exception.Message);
+				Logging.ToLog("Не удалось получить данные с сервера TrueConf: " + exception.Message);
 				errorTrueConfCount++;
 			}
 
 			if (errorTrueConfCount > 1000 && !mailSystemErrorSendedToStp) {
-				LoggingSystem.LogMessageToFile("Отправка заявки в СТП");
+				Logging.ToLog("Отправка заявки в СТП");
 				string sendResult = MailSystem.SendErrorMessageToStp(MailSystem.ErrorType.TrueConf);
 				if (string.IsNullOrEmpty(sendResult)) {
 					mailSystemErrorSendedToStp = true;
 				} else {
-					LoggingSystem.LogMessageToFile("Не удалось отправить: " + sendResult);
+					Logging.ToLog("Не удалось отправить: " + sendResult);
 				}
 			}
 		}
 
 		private void CheckMisEvents() {
-			LoggingSystem.LogMessageToFile("---Проверка базы МИС");
+			Logging.ToLog("---Проверка базы МИС");
 
 			DataTable newSchedulesTable = fbClient.GetDataTable(
 				sqlQueryGetNewSchedule, new Dictionary<string, string>(), 
 				ref errorMisFbCount, ref fbClientErrorSendedToStp);
+
 			DataTable newNotificationsTable = fbClient.GetDataTable(
 				sqlQueryGetNewNotifications, new Dictionary<string, string>(), 
 				ref errorMisFbCount, ref fbClientErrorSendedToStp);
+
 			DataTable newNotificationsForDocsTable = fbClient.GetDataTable(
 				sqlQueryGetNewNotificationsForDocs, new Dictionary<string, string>(),
 				ref errorMisFbCount, ref fbClientErrorSendedToStp);
 
-			LoggingSystem.LogMessageToFile("Новых записей онлайн приемов: " + newSchedulesTable.Rows.Count);
-			LoggingSystem.LogMessageToFile("Онлайн приемов, которые скоро начнутся: " + newNotificationsTable.Rows.Count);
-			LoggingSystem.LogMessageToFile("Онлайн приемов, которые скоро начнутся для докторов: " + newNotificationsForDocsTable.Rows.Count);
+			DataTable paymentNotificationTable = fbClient.GetDataTable(
+				sqlQueryGetPaymentNotifications, new Dictionary<string, string>(),
+				ref errorMisFbCount, ref fbClientErrorSendedToStp);
+
+			Logging.ToLog("Новых записей онлайн приемов: " + newSchedulesTable.Rows.Count);
+			Logging.ToLog("Онлайн приемов, которые скоро начнутся: " + newNotificationsTable.Rows.Count);
+			Logging.ToLog("Онлайн приемов, которые скоро начнутся для докторов: " + newNotificationsForDocsTable.Rows.Count);
+			Logging.ToLog("Приемов с онлайн-оплатой: " + paymentNotificationTable.Rows.Count);
 
 			Dictionary<string, DataTable> tables = new Dictionary<string, DataTable>() {
 				{ "Назначения", newSchedulesTable },
@@ -209,24 +248,24 @@ namespace VideoConsultationsService {
 
 			foreach (KeyValuePair<string, DataTable> values in tables) {
 				foreach (DataRow row in values.Value.Rows) {
-					string schedID = "";
+					string schedID;
 					try {
 						schedID = row["SCHEDID"].ToString();
 					} catch (Exception) {
+						Logging.ToLog("Отсутствует поле SCHEDID, пропуск");
 						continue;
 					}
 				
 					string mobileNumber = GetMobilePhoneNumber(row);
 						
-
 					if (string.IsNullOrEmpty(mobileNumber)) {
-						LoggingSystem.LogMessageToFile("Не удалось определить корректный мобильный номер, пропуск");
+						Logging.ToLog("Не удалось определить корректный мобильный номер, пропуск");
 						continue;
 					}
 
 					DateTime dateTime = GetDateTime(row);
 					if (dateTime.Equals(new DateTime())) {
-						LoggingSystem.LogMessageToFile("Не удалось определить дату назначения, пропуск");
+						Logging.ToLog("Не удалось определить дату назначения, пропуск");
 						continue;
 					}
 
@@ -239,24 +278,102 @@ namespace VideoConsultationsService {
 
 					if (values.Key.Equals("Напоминания")) {
 						string message = Properties.Settings.Default.MessageReminderPatient;
+
 						SendEventSMS(message, mobileNumber, schedID, ref sendedEarlierRemindersEvents);
 					}
 
 					if (values.Key.Equals("НапоминанияДоктора")) {
 						string message = Properties.Settings.Default.MessageReminderDoctor;
 						message = message.Replace("@time", dateTime.ToString("HH:mm"));
+
 						SendEventSMS(message, mobileNumber, schedID, ref sendedEarlierRemindersDocsEvents);
 					}
 				}
 			}
 
+			foreach (DataRow row in paymentNotificationTable.Rows) {
+				try {
+					string schedid = row["SCHEDID"].ToString();
+					string webPayType = row["WEBPAYTYPE"].ToString();
+					string webAccessType = row["WEBACCESSTYPE"].ToString();
+					double amountPayable = double.Parse(row["AMOUNT_PAYABLE"].ToString());
+					double paidByClient = double.Parse(row["PAID_BY_CLIENT"].ToString());
+					DateTime scheduleTime = DateTime.Parse(row["WORKDATE"].ToString() + " " + row["WORKTIME"].ToString());
+
+					if (paidByClient == amountPayable) {
+						Logging.ToLog("SCHEDID: " + schedid + " - прием уже оплачен, пропуск");
+						continue;
+					}
+
+					if (sendedEarlierPayment30minNotification.Contains(schedid) ||
+						sendedEarlierNewPaymentNotification.Contains(schedid)) {
+						Logging.ToLog("Уведомление было отправлено ранее");
+						continue;
+					}
+
+					string subject;
+
+					if ((scheduleTime - DateTime.Now).TotalMinutes <= 30) {
+						subject = "Прием телемедицины скоро начнется, но не был оплачен";
+
+					} else {
+						if (webPayType.Equals("1") && webAccessType.Equals(3)) {
+							Logging.ToLog("У пациента имеется ЛК и есть доступ к платежам, пропуск");
+							continue;
+						}
+
+						subject = "Требуется оплата приема телемедицины через Яндекс-Деньги";
+					}
+
+					string filial = row["SHORTNAME"].ToString();
+					string doctor = row["DNAME"].ToString();
+					string patientName = row["FULLNAME"].ToString();
+					string patientHistnum = row["HISTNUM"].ToString();
+					string patientBirthday = row["BDATE"].ToString();
+					string patientPhone1 = row["PHONE1"].ToString();
+					string patientPhone2 = row["PHONE2"].ToString();
+					string patientPhone3 = row["PHONE3"].ToString();
+
+					string patientPhone = string.Empty;
+					if (!string.IsNullOrEmpty(patientPhone1))
+						patientPhone += patientPhone1 + "; ";
+					if (!string.IsNullOrEmpty(patientPhone2))
+						patientPhone += patientPhone2 + "; ";
+					if (!string.IsNullOrEmpty(patientPhone3))
+						patientPhone += patientPhone3 + "; ";
+					patientPhone = patientPhone.TrimEnd(' ').TrimEnd(';');
+
+					string createDate = row["CREATEDATE"].ToString();
+
+					string body = subject + Environment.NewLine + Environment.NewLine;
+					body += "<table border=\"1\">";
+					body += "<caption>Информация о записи</caption>";
+					body += "<tr><td>Филиал</td><td><b>" + filial + "</b></td></tr>";
+					body += "<tr><td>Дата и время приема</td><td><b>" + scheduleTime.ToShortDateString() + " " + scheduleTime.ToShortTimeString() + "</b></td></tr>";
+					body += "<tr><td>ФИО Доктора</td><td><b>" + doctor + "</b></td></tr>";
+					body += "<tr><td>№ ИБ пациента</td><td><b>" + patientHistnum + "</b></td></tr>";
+					body += "<tr><td>ФИО</td><td><b>" + patientName + "</b></td></tr>";
+					body += "<tr><td>Дата рождения</td><td><b>" + patientBirthday + "</b></td></tr>";
+					body += "<tr><td>Контактный номер</td><td><b>" + patientPhone + "</b></td></tr>";
+					body += "<tr><td>Дата и время записи</td><td><b>" + createDate + "</b></td></tr>";
+					body += "<tr><td>Сумма к оплате</td><td><b>" + amountPayable + "</b></td></tr>";
+					body += "<tr><td>Оплачено</td><td><b>" + paidByClient + "</b></td></tr>";
+					body += "</table>";
+
+					string receiver = Properties.Settings.Default.MailPaymentNotificationAddress;
+					MailSystem.SendMail(subject, body, receiver);
+				} catch (Exception exc) {
+					Logging.ToLog(exc.Message + Environment.NewLine + exc.StackTrace);
+				}
+			}
+
 			if (errorMisFbCount > 1000 && !fbClientErrorSendedToStp) {
-				LoggingSystem.LogMessageToFile("Отправка заявки в СТП");
+				Logging.ToLog("Отправка заявки в СТП");
 				string sendResult = MailSystem.SendErrorMessageToStp(MailSystem.ErrorType.FireBird);
 				if (string.IsNullOrEmpty(sendResult)) {
 					fbClientErrorSendedToStp = true;
 				} else {
-					LoggingSystem.LogMessageToFile("Не удалось отправить: " + sendResult);
+					Logging.ToLog("Не удалось отправить: " + sendResult);
 				}
 			}
 		}
@@ -267,11 +384,11 @@ namespace VideoConsultationsService {
 
 			ItemSendResult sendResult = SvyaznoyZagruzka.SendMessage(mobileNumber, message).Result;
 			if (!sendResult.IsSuccessStatusCode) {
-				LoggingSystem.LogMessageToFile("Не удалось отправить СМС: " + sendResult);
+				Logging.ToLog("Не удалось отправить СМС: " + sendResult);
 				return;
 			}
 
-			LoggingSystem.LogMessageToFile("Отправлено успешно, идентификатор: " + sendResult.MessageId);
+			Logging.ToLog("Отправлено успешно, идентификатор: " + sendResult.MessageId);
 			sendedEarlier.Add(schedId);
 		}
 
@@ -317,173 +434,51 @@ namespace VideoConsultationsService {
 			return returnValue;
 		}
 
-		private void DeleteWebinar(Webinar webinar) {
-			LoggingSystem.LogMessageToFile("Удаление вебинара: " + Environment.NewLine + webinar.ToString());
-
-			try {
-				if (webinar.State.Equals("Активная")) {
-					string tmp = "";
-					tmp = trueConf.StopWebinar(webinar.id).Result;
-				}
-
-				string result = trueConf.DeleteWebinar(webinar.id).Result;
-				if (result.Contains(webinar.id)) {
-					LoggingSystem.LogMessageToFile("Вебинар удален успешно");
-					return;
-				}
-			} catch (Exception e) {
-				LoggingSystem.LogMessageToFile("Возникла ошибка: " + e.Message);
-			}
-
-			LoggingSystem.LogMessageToFile("Не удалось удалить");
-		}
-
-		private void SendReminder(Webinar webinar) {
-			LoggingSystem.LogMessageToFile("Попытка отправки смс-уведомления для вебинара: " + 
-				Environment.NewLine +
-				webinar.ToString());
-			DateTime dateTime = webinar.UnixTimeStampToDateTime();
-			string url = webinar.url;
-			string phoneNumber = webinar.GetPhoneNumber();
-
-			if (string.IsNullOrEmpty(phoneNumber)) {
-				LoggingSystem.LogMessageToFile("Отсутствует номер телефона");
-				return;
-			}
-
-			string message = Properties.Settings.Default.MessageNewAppointment;
-			message = message.Replace("@dateTime", dateTime.ToString("HH:mm dd.MM.yyyy"));
-			
-			ItemSendResult sendResult = SvyaznoyZagruzka.SendMessage(phoneNumber, message).Result;
-			if (!sendResult.IsSuccessStatusCode) {
-				LoggingSystem.LogMessageToFile("Не удалось отправить смс: " + sendResult);
-				return;
-			}
-
-			LoggingSystem.LogMessageToFile("Отправлено успешно, идентификатор: " + sendResult.MessageId);
-			sendedEarlierWebinars.Add(webinar.id);
-		}
-
-
-
-		public void CheckTrueconfServerStateByTimer() {
-			Timer timerCheckState = new Timer(Properties.Settings.Default.CheckStatePeriodInMinutes * 60 * 1000);
-			timerCheckState.Elapsed += TimerCheckState_Elapsed;
-			timerCheckState.AutoReset = true;
-			timerCheckState.Start();
-			TimerCheckState_Elapsed(null, null);
-		}
-
-		public void TimerCheckState_Elapsed(object sender, ElapsedEventArgs e) {
-			if (previousDayTrueConfServer != DateTime.Now.Day)
-				trueConfServerErrorSendedToStp = false;
-
-			CheckTrueConfServer();
-		}
 
 		public int CheckTrueConfServer(bool isSingleCheck = false) {
 			string checkResult = string.Empty;
-
 			string currentMessage = "--- Проверка состояния сервера TrueConf";
-			LoggingSystem.LogMessageToFile(currentMessage, !isZabbixCheck);
-			checkResult += LoggingSystem.ToLogFormat(currentMessage, true);
+
+			Logging.ToLog(currentMessage, !isZabbixCheck);
+			checkResult += Logging.ToLogFormat(currentMessage, true);
 			string errorMessage = string.Empty;
+
+			currentMessage = "Получение списка всех конференций";
+			Logging.ToLog(currentMessage, !isZabbixCheck);
+			checkResult += Logging.ToLogFormat(currentMessage, true);
+
+			List<ObjectConference> conferenceList = null;
 			try {
-				DateTime epoch = new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc);
-				long unixDateTime = (long)(DateTime.Now.AddMinutes(10).ToUniversalTime() - epoch).TotalSeconds;
-				string timestamp = unixDateTime.ToString();
-
-				currentMessage = "Создание тестового вебинара";
-				LoggingSystem.LogMessageToFile(currentMessage, !isZabbixCheck);
-				checkResult += LoggingSystem.ToLogFormat(currentMessage, true);
-
-				Webinar webinar = null;
-				try {
-					webinar = trueConf.CreateNewWebinar("state_check", "nn-admin@ruh93.trueconf.name", timestamp).Result;
-					currentMessage = "Вебинар создан, ID:" + webinar.id;
-					LoggingSystem.LogMessageToFile(currentMessage, !isZabbixCheck);
-					checkResult += LoggingSystem.ToLogFormat(currentMessage, true);
-				} catch (Exception e) {
-					string msg = e.Message + Environment.NewLine + e.StackTrace;
-					LoggingSystem.LogMessageToFile(msg, !isZabbixCheck);
-					checkResult += LoggingSystem.ToLogFormat(msg, true);
-					errorMessage += msg + Environment.NewLine;
-				}
-
-				if (webinar != null) {
-					currentMessage = "Получение списка всех вебинаров";
-					LoggingSystem.LogMessageToFile(currentMessage, !isZabbixCheck);
-					checkResult += LoggingSystem.ToLogFormat(currentMessage, true);
-
-					Dictionary<string, Webinar> webinars = null;
-					try {
-						webinars = trueConf.GetAllWebinars().Result;
-						currentMessage = "Список вебинаров содержит записей: " + webinars.Count;
-						LoggingSystem.LogMessageToFile(currentMessage, !isZabbixCheck);
-						checkResult += LoggingSystem.ToLogFormat(currentMessage, true);
-
-						if (!webinars.ContainsKey(webinar.id)) {
-							errorMessage = "!!! Созданный вебинар (" + webinar.id + ") отсутствует в списке" + Environment.NewLine;
-							LoggingSystem.LogMessageToFile(errorMessage, !isZabbixCheck);
-							checkResult += LoggingSystem.ToLogFormat(errorMessage, true);
-						}
-					} catch (Exception excAllWebinar) {
-						string msgAllWebinar = excAllWebinar.Message + Environment.NewLine + excAllWebinar.StackTrace;
-						LoggingSystem.LogMessageToFile(msgAllWebinar, !isZabbixCheck);
-						checkResult += LoggingSystem.ToLogFormat(msgAllWebinar, true);
-						errorMessage += msgAllWebinar + Environment.NewLine;
-					}
-
-					currentMessage = "Удаление тестового вебинара";
-					LoggingSystem.LogMessageToFile(currentMessage, !isZabbixCheck);
-					checkResult += LoggingSystem.ToLogFormat(currentMessage, true);
-
-					try {
-						string deleteResult = trueConf.DeleteWebinar(webinar.id).Result;
-						currentMessage = "Результат удаления: " + deleteResult;
-						LoggingSystem.LogMessageToFile(currentMessage, !isZabbixCheck);
-						checkResult += LoggingSystem.ToLogFormat(currentMessage, true);
-						
-						if (!deleteResult.Contains(webinar.id)) {
-							errorMessage += "!!! Тестовый вебинар отсутствует в списке удаленных" + Environment.NewLine;
-							LoggingSystem.LogMessageToFile(errorMessage, !isZabbixCheck);
-							checkResult += LoggingSystem.ToLogFormat(errorMessage, true);
-						}
-					} catch (Exception excDelete) {
-						string msgDelete = excDelete.Message + Environment.NewLine + excDelete.StackTrace;
-						LoggingSystem.LogMessageToFile(msgDelete, !isZabbixCheck);
-						checkResult += LoggingSystem.ToLogFormat(msgDelete, true);
-						errorMessage += msgDelete + Environment.NewLine;
-					}
-				}
-			} catch (Exception exc) {
-				if (!string.IsNullOrEmpty(errorMessage))
-					errorMessage += Environment.NewLine;
-
-				errorMessage += exc.Message + Environment.NewLine + exc.StackTrace;
-				LoggingSystem.LogMessageToFile(errorMessage, !isZabbixCheck);
-				checkResult += LoggingSystem.ToLogFormat(errorMessage, true);
+				conferenceList = trueConf.GetConferenceList().Result;
+				currentMessage = "Список конференций содержит записей: " + conferenceList.Count;
+				Logging.ToLog(currentMessage, !isZabbixCheck);
+				checkResult += Logging.ToLogFormat(currentMessage, true);
+			} catch (Exception excAllWebinar) {
+				string msgAllWebinar = excAllWebinar.Message + Environment.NewLine + excAllWebinar.StackTrace;
+				Logging.ToLog(msgAllWebinar, !isZabbixCheck);
+				checkResult += Logging.ToLogFormat(msgAllWebinar, true);
+				errorMessage += msgAllWebinar + Environment.NewLine;
 			}
 
 			if (string.IsNullOrEmpty(errorMessage)) {
 				currentMessage = "--- Проверка выполнена успешно, ошибок не обнаружено";
-				LoggingSystem.LogMessageToFile(currentMessage, !isZabbixCheck);
-				checkResult += LoggingSystem.ToLogFormat(currentMessage);
+				Logging.ToLog(currentMessage, !isZabbixCheck);
+				checkResult += Logging.ToLogFormat(currentMessage);
 				errorTrueConfServerCountByTimer = 0;
 				
 				if (isZabbixCheck) {
 					Console.WriteLine("0");
-					LoggingSystem.ToLogFormat("Результат проверки для Zabbix: 0");
+					Logging.ToLogFormat("Результат проверки для Zabbix: 0");
 					return 0;
 				}
 			} else {
 				errorTrueConfServerCountByTimer++;
 
 				if (errorTrueConfServerCountByTimer < 3) {
-					LoggingSystem.LogMessageToFile("Ошибка проявилась менее 3 раз подряд, пропуск отправки заявки", !isZabbixCheck);
+					Logging.ToLog("Ошибка проявилась менее 3 раз подряд, пропуск отправки заявки", !isZabbixCheck);
 				} else {
 					if (trueConfServerErrorSendedToStp) {
-						LoggingSystem.LogMessageToFile("Сообщение об ошибке было отправлено ранее", !isZabbixCheck);
+						Logging.ToLog("Сообщение об ошибке было отправлено ранее", !isZabbixCheck);
 					} else {
 						MailSystem.SendErrorMessageToStp(MailSystem.ErrorType.CheckStateError, errorMessage);
 						trueConfServerErrorSendedToStp = true;
@@ -492,7 +487,7 @@ namespace VideoConsultationsService {
 
 				if (isZabbixCheck) {
 					Console.WriteLine("1");
-					LoggingSystem.ToLogFormat("Результат проверки для Zabbix: 1");
+					Logging.ToLogFormat("Результат проверки для Zabbix: 1");
 					return 1;
 				}
 			}

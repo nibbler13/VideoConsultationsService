@@ -50,8 +50,8 @@ namespace VideoConsultationsService {
 
 
 		private static void Start() {
-			LoggingSystem.LogMessageToFile("Запуск");
-			LoggingSystem.LogMessageToFile("Starting, cycle interval in seconds: " +
+			Logging.ToLog("Запуск");
+			Logging.ToLog("Starting, cycle interval in seconds: " +
 				Properties.Settings.Default.UpdatePeriodInSeconds);
 
 			EventSystem eventSystem = new EventSystem();
@@ -68,7 +68,7 @@ namespace VideoConsultationsService {
 		}
 
 		private static void Stop() {
-			LoggingSystem.LogMessageToFile("Stopping");
+			Logging.ToLog("Stopping");
 		}
 	}
 }

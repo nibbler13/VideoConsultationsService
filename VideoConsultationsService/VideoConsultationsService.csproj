@@ -55,14 +55,17 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="Conference.cs" />
+    <Compile Include="ObjectClientRights.cs" />
+    <Compile Include="ObjectConference.cs" />
     <Compile Include="EventSystem.cs" />
     <Compile Include="FBClient.cs" />
     <Compile Include="ItemDeliveryState.cs" />
     <Compile Include="ItemPhoneNumber.cs" />
     <Compile Include="ItemSendResult.cs" />
-    <Compile Include="LoggingSystem.cs" />
+    <Compile Include="Logging.cs" />
     <Compile Include="MailSystem.cs" />
+    <Compile Include="ObjectMiniInvintation.cs" />
+    <Compile Include="ObjectSchedule.cs" />
     <Compile Include="Properties\Settings.Designer.cs">
       <AutoGen>True</AutoGen>
       <DesignTimeSharedInput>True</DesignTimeSharedInput>
@@ -72,7 +75,7 @@
     <Compile Include="VideoConsultationsService.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="TrueConf.cs" />
-    <Compile Include="Webinar.cs" />
+    <Compile Include="ObjectWebinar.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="App.config" />

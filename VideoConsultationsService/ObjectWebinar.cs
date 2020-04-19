@@ -6,12 +6,10 @@ using System.Threading.Tasks;
 using Newtonsoft.Json;
 
 namespace VideoConsultationsService {
-	public class Webinars {
-		[JsonProperty("list")]
-		public Dictionary<string, Webinar> Dict { get; set; }
-	}
 
-	public class Webinar : Conference {
+	//v.3.1
+	//DEPRECATED use now Objects/Conference
+	public class ObjectWebinar : ObjectConference {
 		[JsonProperty("allow_guests_audio_video")]
 		public bool allowGuestsAudioVideo { get; set; }
 
@@ -27,32 +25,32 @@ namespace VideoConsultationsService {
 
 		public DateTime UnixTimeStampToDateTime() {
 			DateTime dateTime = new DateTime(1970, 1, 1, 0, 0, 0, 0, System.DateTimeKind.Utc);
-			dateTime = dateTime.AddSeconds(invitationTimestamp).ToLocalTime();
+			//dateTime = dateTime.AddSeconds(invitationTimestamp).ToLocalTime();
 			return dateTime;
 		}
 
 		public string GetOwner() {
-			if (string.IsNullOrEmpty(owner))
+			if (string.IsNullOrEmpty(Owner))
 				return "";
 
-			if (!owner.Contains("@"))
-				return owner;
+			if (!Owner.Contains("@"))
+				return Owner;
 
-			return owner.Split('@')[0];
+			return Owner.Split('@')[0];
 		}
 
 		public string GetStartDateAndTime() {
-			if (invitationTimestamp == 0)
+			//if (invitationTimestamp == 0)
 				return "Не задано";
 
-			return UnixTimeStampToDateTime().ToString();
+			//return UnixTimeStampToDateTime().ToString();
 		}
 
 		public string GetPhoneNumber() {
 			string phoneNumber = "";
 			try {
-				if (topic.Length > 10) {
-					string rightTenSymbols = topic.Substring(topic.Length - 10);
+				if (Topic.Length > 10) {
+					string rightTenSymbols = Topic.Substring(Topic.Length - 10);
 					if (rightTenSymbols.All(char.IsDigit))
 						phoneNumber = rightTenSymbols;
 				}

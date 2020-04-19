@@ -9,11 +9,14 @@ using System.Threading.Tasks;
 namespace VideoConsultationsService {
 	class SvyaznoyZagruzka {
 		public async static Task<ItemSendResult> SendMessage(string phoneNumber, string message, DateTime? dateTime = null) {
-			LoggingSystem.LogMessageToFile("Отправка СМС для абонента " + phoneNumber + " со следующим текстом: " + message);
+			Logging.ToLog("Отправка СМС для абонента " + phoneNumber + " со следующим текстом: " + message);
 			ItemSendResult itemSendResult = new ItemSendResult();
 
 			try {
 				HttpClient client = new HttpClient();
+
+				if (phoneNumber.Length == 10)
+					phoneNumber = "7" + phoneNumber;
 
 				Uri uri = new Uri(
 						"http://lk.zagruzka.com:9002/budzdorov?" +
