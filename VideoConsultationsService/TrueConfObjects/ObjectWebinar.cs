@@ -5,7 +5,7 @@ using System.Text;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
 
-namespace VideoConsultationsService {
+namespace VideoConsultationsService.TrueConfObjects {
 
 	//v.3.1
 	//DEPRECATED use now Objects/Conference

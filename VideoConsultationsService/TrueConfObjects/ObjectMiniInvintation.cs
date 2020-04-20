@@ -5,7 +5,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace VideoConsultationsService {
+namespace VideoConsultationsService.TrueConfObjects {
 	public class ObjectMiniInvintation {
 		//v.3.1
 		//Conference invitation object for using in Conference based object.

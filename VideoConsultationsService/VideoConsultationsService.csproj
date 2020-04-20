@@ -55,8 +55,9 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="ObjectClientRights.cs" />
-    <Compile Include="ObjectConference.cs" />
+    <Compile Include="DbQueries.cs" />
+    <Compile Include="TrueConfObjects\ObjectClientRights.cs" />
+    <Compile Include="TrueConfObjects\ObjectConference.cs" />
     <Compile Include="EventSystem.cs" />
     <Compile Include="FBClient.cs" />
     <Compile Include="ItemDeliveryState.cs" />
@@ -64,8 +65,10 @@
     <Compile Include="ItemSendResult.cs" />
     <Compile Include="Logging.cs" />
     <Compile Include="MailSystem.cs" />
-    <Compile Include="ObjectMiniInvintation.cs" />
-    <Compile Include="ObjectSchedule.cs" />
+    <Compile Include="TrueConfObjects\ObjectGroupMini.cs" />
+    <Compile Include="TrueConfObjects\ObjectMiniInvintation.cs" />
+    <Compile Include="TrueConfObjects\ObjectSchedule.cs" />
+    <Compile Include="TrueConfObjects\ObjectUser.cs" />
     <Compile Include="Properties\Settings.Designer.cs">
       <AutoGen>True</AutoGen>
       <DesignTimeSharedInput>True</DesignTimeSharedInput>
@@ -75,7 +78,7 @@
     <Compile Include="VideoConsultationsService.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="TrueConf.cs" />
-    <Compile Include="ObjectWebinar.cs" />
+    <Compile Include="TrueConfObjects\ObjectWebinar.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="App.config" />
