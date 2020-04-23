@@ -14,7 +14,6 @@ namespace VideoConsultationsService {
 		private readonly bool isZabbixCheck;
 		
 		private int previousDay;
-		private int previousDayTrueConfServer;
 		private uint errorTrueConfCount = 0;
 		private uint errorTrueConfServerCountByTimer = 0;
 		private uint errorMisFbCount = 0;
@@ -33,7 +32,6 @@ namespace VideoConsultationsService {
 			trueConf = new TrueConf();
 			this.isZabbixCheck = isZabbixCheck;
 			previousDay = DateTime.Now.Day;
-			previousDayTrueConfServer = previousDay;
 
 			fbClient = new FBClient(
 				Properties.Settings.Default.FbMisAddress,
@@ -57,18 +55,19 @@ namespace VideoConsultationsService {
 			if (previousDay != DateTime.Now.Day) {
 				Logging.ToLog("Обнуление списка уведомлений");
 
-				foreach (List<string> list in new List<string>[] {
+				List<string>[] sendedEarlier = new List<string>[] {
 					sendedEarlierWebinars,
 					sendedEarlierScheduleEvents,
 					sendedEarlierRemindersEvents,
 					sendedEarlierRemindersDocsEvents,
 					sendedEarlierNewPaymentNotification,
-					sendedEarlierPayment30minNotification})
+					sendedEarlierPayment30minNotification};
+
+				foreach (List<string> list in sendedEarlier)
 					if (list.Count > 10)
 						list.RemoveRange(0, list.Count - 10);
 
 				DisconnectUsers();
-
 				previousDay = DateTime.Now.Day;
 			}
 
@@ -115,8 +114,12 @@ namespace VideoConsultationsService {
 				ref errorMisFbCount, ref fbClientErrorSendedToStp);
 
 			DataTable paymentNotificationTable = fbClient.GetDataTable(
-				DbQueries.sqlQueryGetPaymentNotifications, new Dictionary<string, string>(),
-				ref errorMisFbCount, ref fbClientErrorSendedToStp);
+				DbQueries.sqlQueryGetPaymentNotifications + DbQueries.NotificationByCreateDate, 
+				new Dictionary<string, string>(), ref errorMisFbCount, ref fbClientErrorSendedToStp);
+
+			paymentNotificationTable.Merge(fbClient.GetDataTable(
+				DbQueries.sqlQueryGetPaymentNotifications + DbQueries.NotificationByWorktime,
+				new Dictionary<string, string>(), ref errorMisFbCount, ref fbClientErrorSendedToStp));
 
 			Logging.ToLog("Новых записей онлайн приемов: " + newSchedulesTable.Rows.Count);
 			Logging.ToLog("Онлайн приемов, которые скоро начнутся: " + newNotificationsTable.Rows.Count);
@@ -177,35 +180,64 @@ namespace VideoConsultationsService {
 			foreach (DataRow row in paymentNotificationTable.Rows) {
 				try {
 					string schedid = row["SCHEDID"].ToString();
-					string webPayType = row["WEBPAYTYPE"].ToString();
-					string webAccessType = row["WEBACCESSTYPE"].ToString();
+					string onlineAccount = row["ONLINE_ACCOUNT"].ToString().Trim(' ');
+					string payType = row["PAYTYPE"].ToString().Trim(' ');
 					double amountPayable = double.Parse(row["AMOUNT_PAYABLE"].ToString());
 					double paidByClient = double.Parse(row["PAID_BY_CLIENT"].ToString());
 					DateTime scheduleTime = DateTime.Parse(row["WORKDATE"].ToString().Replace(" 0:00:00", "") + " " + row["WORKTIME"].ToString());
+					Logging.ToLog("SCHEDID: " + schedid);
 
-					if (paidByClient == amountPayable) {
-						Logging.ToLog("SCHEDID: " + schedid + " - прием уже оплачен, пропуск");
+					if (payType.Equals("Предсчет") && paidByClient == amountPayable) {
+						Logging.ToLog("Прием уже оплачен, пропуск");
 						continue;
 					}
 
-					if (sendedEarlierPayment30minNotification.Contains(schedid) ||
-						sendedEarlierNewPaymentNotification.Contains(schedid)) {
-						Logging.ToLog("Уведомление было отправлено ранее");
-						continue;
-					}
-
-					string subject;
+					string subject = string.Empty;
+					string body = string.Empty;
 
 					if ((scheduleTime - DateTime.Now).TotalMinutes <= 30) {
+						if (sendedEarlierPayment30minNotification.Contains(schedid)) {
+							Logging.ToLog("Уведомление было отправлено ранее");
+							continue;
+						}
+
+						//s.workdate = current_date and datediff(minute, current_time, dateadd(minute, S.BHOUR* 60 + S.BMIN, cast('00:00' as time))) between 0 and 30
+						//2 событие - за 30 минут до начала
+						//если amount_payable != paid_by_client - клиент не оплатил прием, который скоро начнется, отправить сообщение менеджеру
 						subject = "Прием телемедицины скоро начнется, но он не был оплачен";
+						body = subject;
+						sendedEarlierPayment30minNotification.Add(schedid);
 
 					} else {
-						if (webPayType.Equals("1") && webAccessType.Equals(3)) {
+						//1.3 предсчет и online_account = да - пропускаем, пациент оплатит самостоятельно
+						if (onlineAccount.Equals("Да") && payType.Equals("Предсчет")) {
 							Logging.ToLog("У пациента имеется ЛК и есть доступ к платежам, пропуск");
 							continue;
 						}
 
-						subject = "Требуется оплата приема телемедицины через Яндекс-Деньги";
+						if (sendedEarlierNewPaymentNotification.Contains(schedid)) {
+							Logging.ToLog("Уведомление было отправлено ранее");
+							continue;
+						}
+
+						subject = "Требуется оплата приема телемедицины";
+
+						//s.createdate between dateadd(minute, -30, current_timestamp) and dateadd(minute, 30, current_timestamp) 
+						//1 событие - появилась новая запись на телемедицину
+						//если(amount_payable != paid_by_client)
+						//1.4 предсчет и online_account = нет - клиент записался через ЛК, нет доступа к оплате, отправить менеджеру сообщение для оплаты через яндекс-деньги
+						if (payType.Equals("Предсчет"))
+							body = "Пациент записался через ЛК, у него нет доступа к платежам. Требуется оплата приема телемедицины через Яндекс-Деньги.";
+
+						//1.2 услуга запланирована и online_account = да, то клиент записался через КЦ, отправить сообщение менеджеру для оплаты через ЛК
+						else if (onlineAccount.Equals("Да"))
+							body = "Пациент записался через КЦ, у него есть ЛК и доступ к платежам. Требуется оплата приема.";
+
+						//1.1 услуга запланирована и online_account = нет, то клиент записался через КЦ, отправить сообщение менеджеру для оплаты через яндекс-деньги
+						else
+							body = "Пациент записался через КЦ, у него нет доступа к платежам в ЛК. Требуется оплата приема телемедицины через Яндекс-деньги.";
+
+						sendedEarlierNewPaymentNotification.Add(schedid);
 					}
 
 					string filial = row["SHORTNAME"].ToString();
@@ -228,7 +260,7 @@ namespace VideoConsultationsService {
 
 					string createDate = row["CREATEDATE"].ToString();
 
-					string body = subject + Environment.NewLine + Environment.NewLine;
+					body += Environment.NewLine + Environment.NewLine;
 					body += "<table border=\"1\">";
 					body += "<caption>Информация о записи</caption>";
 					body += "<tr><td>Филиал</td><td><b>" + filial + "</b></td></tr>";
@@ -239,11 +271,46 @@ namespace VideoConsultationsService {
 					body += "<tr><td>Дата рождения</td><td><b>" + patientBirthday + "</b></td></tr>";
 					body += "<tr><td>Контактный номер</td><td><b>" + patientPhone + "</b></td></tr>";
 					body += "<tr><td>Дата и время записи</td><td><b>" + createDate + "</b></td></tr>";
+					body += "<tr><td>Наличие ЛК и доступа к платежам</td><td><b>" + onlineAccount + "</b></td></tr>";
+					body += "<tr><td>Тип оплаты</td><td><b>" + payType + "</b></td></tr>";
 					body += "<tr><td>Сумма к оплате</td><td><b>" + amountPayable + "</b></td></tr>";
 					body += "<tr><td>Оплачено</td><td><b>" + paidByClient + "</b></td></tr>";
 					body += "</table>";
 
 					string receiver = Properties.Settings.Default.MailPaymentNotificationAddress;
+
+					switch (filial) {
+						case "МДМ":
+							receiver += ";l.v.shevtsova@bzklinika.ru";
+							break;
+						case "С-Пб.":
+							//receiver += ";";
+							break;
+						case "М-СРЕТ":
+							receiver += ";Reception_mspo@bzklinika.ru";
+							break;
+						case "Красн":
+							receiver += ";reception_krd@bzklinika.ru;n.zachepilo@bzklinika.ru";
+							break;
+						case "Уфа":
+							receiver += ";ufkk-kassa@bzklinika.ru;shakirova@bzklinika.ru";
+							break;
+						case "Казань":
+							receiver += ";info_kzn@bzklinika.ru";
+							break;
+						case "СУЩ":
+							receiver += ";kassa-mssu@bzklinika.ru";
+							break;
+						case "К-УРАЛ":
+							receiver += ";g.gilyazova@bzklinika.ru;zh.soloshenko@bzklinika.ru";
+							break;
+						case "Сочи":
+							receiver += ";reception_sochi@bzklinika.ru";
+							break;
+						default:
+							break;
+					}
+					 
 					MailSystem.SendMail(subject, body, receiver);
 				} catch (Exception exc) {
 					Logging.ToLog(exc.Message + Environment.NewLine + exc.StackTrace);
@@ -377,8 +444,6 @@ namespace VideoConsultationsService {
 
 			if (isSingleCheck)
 				MailSystem.SendErrorMessageToStp(MailSystem.ErrorType.SingleCheck, checkResult);
-
-			previousDayTrueConfServer = DateTime.Now.Day;
 
 			return 0;
 		}

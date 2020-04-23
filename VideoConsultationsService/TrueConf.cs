@@ -81,7 +81,7 @@ namespace VideoConsultationsService {
 			string jsonString = await response.Content.ReadAsStringAsync();
 			Logging.ToLog(jsonString);
 
-			return false;
+			return true;
 		}
 	}
 }
