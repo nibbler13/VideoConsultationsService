@@ -26,16 +26,17 @@ namespace VideoConsultationsService {
 			"	EXTRACT(YEAR FROM Sh.workdate) AS DATA, " +
 			"	Sh.bhour, " +
 			"	Sh.bMin, " +
-			"	Sh.SchedId " +
+			"	Sh.SchedId, " +
+			"  p.pname " +
 			"FROM Clients Cl " +
 			"	JOIN Schedule Sh ON Cl.pcode = Sh.pcode " +
 			"	JOIN Chairs Ch ON Ch.chid = Sh.chid " +
 			"	JOIN Rooms R ON R.rid = Ch.rid " +
 			"	JOIN DoctShedule Ds ON Ds.DCode = Sh.DCode AND Sh.WorkDate = Ds.WDate AND Sh.ChId = Ds.Chair " +
 			"	JOIN Doctor D ON D.DCode = Sh.DCode " +
+			"  JOIN phprogrref p on p.pid = sh.frompid " +
 			"WHERE Sh.createdate >= current_date + DATEADD(minute, -10, current_time) " +
 			"	AND (Sh.emid IS NULL OR Sh.emid = 0) " +
-			// "	AND Ds.DepNum IN (992582623, 992582624, 992582625, 992582626, 992582628, 992092102, 992582680) " +
 			"	AND Sh.OnlineType = 1";
 
 		/* напоминание за 0-6 минут до начала пациентам*/
@@ -111,12 +112,20 @@ namespace VideoConsultationsService {
 			"coalesce(p.SUMMARUB_DISC, 0) amount_payable, " +
 			"coalesce(pay.amountrub, 0) paid_by_client, " +
 			"iif(coalesce(c.WEBPAYTYPE, 0) <> 1 or coalesce(c.WEBACCESSTYPE, 0) <> 3, 'Нет', 'Да') online_account, " +
-			"iif(p.did is null, 'Услуга запланирована','Предсчет') paytype " +
+			"iif(p.did is null, 'Услуга запланирована','Предсчет') paytype, " +
+			"(select list(j.jname|| ' дог.'|| A.AGNUM || ' ' || L.SHORTNAME, '<br>') from CLHISTNUM CL " +
+			" join JPERSONS J on J.JID = CL.JID " +
+			" join JPLISTS L on L.LID = CL.LSTID " +
+			" join JPAGREEMENT A on A.AGRID = CL.AGRID " +
+			" where CL.PCODE = S.PCODE and coalesce(CL.ISDELETED, 0) = 0 and " +
+			" coalesce(CL.DATECANCEL, CL.FDATE) >= s.workdate and CL.BDATE <= s.workdate) CLHISTINFO, " +
+			"dep.depname " +
 			"from schedule s " +
 			"join filials f on f.filid = s.filial " +
 			"join doctor d on d.dcode = s.dcode " +
 			"join clients c on c.pcode = s.pcode " +
 			"join doctshedule ds on ds.schedident = s.schedident " +
+			"join departments dep on dep.depnum = ds.depnum " +
 			"left join dailyplan p on p.did = s.planid and p.PLANTYPE = 204 " +
 			"left join ( " +
 			"select pcode, planid, sum(iif(typeoper in (2,5, 102),-amountrub,amountrub)) amountrub from ( " +
@@ -132,7 +141,16 @@ namespace VideoConsultationsService {
 			"where (exists (select null from dailyplandet where did = p.did and schid in (990054338,990054339,990054340)) or " +
 			"  exists (select null from scheduledet where schedid = s.schedid and schid in (990054338,990054339,990054340)))";
 
-		public const string NotificationByCreateDate = "  and s.createdate between dateadd(minute, -30, current_timestamp) and dateadd(minute, 30, current_timestamp)";
-		public const string NotificationByWorktime = "  and s.workdate = current_date and datediff(minute, current_time, dateadd(minute, S.BHOUR * 60 + S.BMIN, cast('00:00' as time))) between 0 and 30";
+
+
+		public const string NotificationByCreateDate = "  and s.createdate between dateadd(minute, -30, current_timestamp) and dateadd(minute, 30, current_timestamp)" +
+			" and f.filid not in (9, 15)";
+		public const string NotificationByWorktime = "  and s.workdate = current_date and datediff(minute, current_time, dateadd(minute, S.BHOUR * 60 + S.BMIN, cast('00:00' as time))) between 0 and 30" +
+			" and f.filid not in (9, 15)";
+
+		public const string NotificationByCreateDateOffset2H = "  and s.createdate between dateadd(minute, 90, current_timestamp) and dateadd(minute, 150, current_timestamp)" +
+			" and f.filid in (9, 15)";
+		public const string NotificationByWorktimeOffset2H = "  and s.workdate = current_date and datediff(minute, current_time, dateadd(minute, S.BHOUR * 60 + S.BMIN, cast('00:00' as time))) between 120 and 150" +
+			" and f.filid in (9, 15)";
 	}
 }

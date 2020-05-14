@@ -121,6 +121,14 @@ namespace VideoConsultationsService {
 				DbQueries.sqlQueryGetPaymentNotifications + DbQueries.NotificationByWorktime,
 				new Dictionary<string, string>(), ref errorMisFbCount, ref fbClientErrorSendedToStp));
 
+			paymentNotificationTable.Merge(fbClient.GetDataTable(
+				DbQueries.sqlQueryGetPaymentNotifications + DbQueries.NotificationByWorktimeOffset2H,
+				new Dictionary<string, string>(), ref errorMisFbCount, ref fbClientErrorSendedToStp));
+
+			paymentNotificationTable.Merge(fbClient.GetDataTable(
+				DbQueries.sqlQueryGetPaymentNotifications + DbQueries.NotificationByWorktimeOffset2H,
+				new Dictionary<string, string>(), ref errorMisFbCount, ref fbClientErrorSendedToStp));
+
 			Logging.ToLog("Новых записей онлайн приемов: " + newSchedulesTable.Rows.Count);
 			Logging.ToLog("Онлайн приемов, которые скоро начнутся: " + newNotificationsTable.Rows.Count);
 			Logging.ToLog("Онлайн приемов, которые скоро начнутся для докторов: " + newNotificationsForDocsTable.Rows.Count);
@@ -231,7 +239,7 @@ namespace VideoConsultationsService {
 
 						//1.2 услуга запланирована и online_account = да, то клиент записался через КЦ, отправить сообщение менеджеру для оплаты через ЛК
 						else if (onlineAccount.Equals("Да"))
-							body = "Пациент записался через КЦ, у него есть ЛК и доступ к платежам. Требуется оплата приема.";
+							body = "Пациент записался через КЦ, у него есть ЛК и доступ к платежам. Необходимо сформировать предварительный счет в МИС Инфоклиника.";
 
 						//1.1 услуга запланирована и online_account = нет, то клиент записался через КЦ, отправить сообщение менеджеру для оплаты через яндекс-деньги
 						else
@@ -248,6 +256,11 @@ namespace VideoConsultationsService {
 					string patientPhone1 = row["PHONE1"].ToString();
 					string patientPhone2 = row["PHONE2"].ToString();
 					string patientPhone3 = row["PHONE3"].ToString();
+					string clhistinfo = row["CLHISTINFO"].ToString();
+					if (string.IsNullOrEmpty(clhistinfo) || string.IsNullOrWhiteSpace(clhistinfo))
+						clhistinfo = "Наличный расчет";
+					else
+						clhistinfo = "Действующие страховки:<br>" + clhistinfo;
 
 					string patientPhone = string.Empty;
 					if (!string.IsNullOrEmpty(patientPhone1))
@@ -259,17 +272,26 @@ namespace VideoConsultationsService {
 					patientPhone = patientPhone.TrimEnd(' ').TrimEnd(';');
 
 					string createDate = row["CREATEDATE"].ToString();
+					string depname = row["DEPNAME"].ToString();
+
+					//if (depname.Equals("ТЕРАПИЯ ОНЛАЙН") || depname.Equals("Педиатрия онлайн"))
+					//	if (clhistinfo.ToLower().Contains("ингос")) {
+					//		Logging.ToLog("У пациента страховка Ингосстрах и отделение входит в страховку, пропуск");
+					//		continue;
+					//	}
 
 					body += Environment.NewLine + Environment.NewLine;
 					body += "<table border=\"1\">";
 					body += "<caption>Информация о записи</caption>";
 					body += "<tr><td>Филиал</td><td><b>" + filial + "</b></td></tr>";
 					body += "<tr><td>Дата и время приема</td><td><b>" + scheduleTime.ToShortDateString() + " " + scheduleTime.ToShortTimeString() + "</b></td></tr>";
+					body += "<tr><td>Отделение</td><td><b>" + depname + "</b></td></tr>";
 					body += "<tr><td>ФИО Доктора</td><td><b>" + doctor + "</b></td></tr>";
 					body += "<tr><td>№ ИБ пациента</td><td><b>" + patientHistnum + "</b></td></tr>";
 					body += "<tr><td>ФИО</td><td><b>" + patientName + "</b></td></tr>";
 					body += "<tr><td>Дата рождения</td><td><b>" + patientBirthday + "</b></td></tr>";
 					body += "<tr><td>Контактный номер</td><td><b>" + patientPhone + "</b></td></tr>";
+					body += "<tr><td>Способ оплаты</td><td><b>" + clhistinfo + "</b></td></tr>";
 					body += "<tr><td>Дата и время записи</td><td><b>" + createDate + "</b></td></tr>";
 					body += "<tr><td>Наличие ЛК и доступа к платежам</td><td><b>" + onlineAccount + "</b></td></tr>";
 					body += "<tr><td>Тип оплаты</td><td><b>" + payType + "</b></td></tr>";
@@ -281,10 +303,10 @@ namespace VideoConsultationsService {
 
 					switch (filial) {
 						case "МДМ":
-							receiver += ";l.v.shevtsova@bzklinika.ru";
+							receiver += ";l.v.shevtsova@bzklinika.ru;stadmdm@bzklinika.ru;mskm-kassa@bzklinika.ru";
 							break;
 						case "С-Пб.":
-							//receiver += ";";
+							receiver += ";regist_splp@bzklinika.ru;a.holdina@bzklinika.ru";
 							break;
 						case "М-СРЕТ":
 							receiver += ";Reception_mspo@bzklinika.ru";
