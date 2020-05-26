@@ -26,15 +26,9 @@ namespace VideoConsultationsService {
 			"	EXTRACT(YEAR FROM Sh.workdate) AS DATA, " +
 			"	Sh.bhour, " +
 			"	Sh.bMin, " +
-			"	Sh.SchedId, " +
-			"  p.pname " +
-			"FROM Clients Cl " +
-			"	JOIN Schedule Sh ON Cl.pcode = Sh.pcode " +
-			"	JOIN Chairs Ch ON Ch.chid = Sh.chid " +
-			"	JOIN Rooms R ON R.rid = Ch.rid " +
-			"	JOIN DoctShedule Ds ON Ds.DCode = Sh.DCode AND Sh.WorkDate = Ds.WDate AND Sh.ChId = Ds.Chair " +
-			"	JOIN Doctor D ON D.DCode = Sh.DCode " +
-			"  JOIN phprogrref p on p.pid = sh.frompid " +
+			"	Sh.SchedId " +
+			"FROM Schedule Sh " +
+			"	LEFT JOIN Clients Cl ON Cl.pcode = Sh.pcode " +
 			"WHERE Sh.createdate >= current_date + DATEADD(minute, -10, current_time) " +
 			"	AND (Sh.emid IS NULL OR Sh.emid = 0) " +
 			"	AND Sh.OnlineType = 1";
@@ -51,12 +45,8 @@ namespace VideoConsultationsService {
 			"	Sh.bhour, " +
 			"	Sh.bMin, " +
 			"	Sh.SchedId " +
-			"FROM Clients Cl " +
-			"	JOIN Schedule Sh ON Cl.pcode = Sh.pcode " +
-			"	JOIN Chairs Ch ON Ch.chid = Sh.chid " +
-			"	JOIN Rooms R ON R.rid = Ch.rid " +
-			"	JOIN DoctShedule Ds ON Ds.DCode = Sh.DCode AND Sh.WorkDate = Ds.WDate AND Sh.ChId = Ds.Chair " +
-			"	JOIN Doctor D ON D.DCode = Sh.DCode " +
+			"FROM Schedule Sh " +
+			"	LEFT JOIN Clients Cl ON Cl.pcode = Sh.pcode " +
 			"WHERE Sh.workdate = 'TODAY' " +
 			"	AND CAST('NOW' AS TIME) BETWEEN " +
 			"   CAST(IIF (Sh.bhour< 10,0 || Sh.bhour, Sh.bhour) || ':' || " +
