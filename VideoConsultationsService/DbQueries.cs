@@ -142,5 +142,37 @@ namespace VideoConsultationsService {
 			" and f.filid in (9, 15)";
 		public const string NotificationByWorktimeOffset2H = "  and s.workdate = current_date and datediff(minute, current_time, dateadd(minute, S.BHOUR * 60 + S.BMIN, cast('00:00' as time))) between 120 and 150" +
 			" and f.filid in (9, 15)";
+
+		public const string GetTelemedicineUserList = 
+			"select " +
+			"lower(d.ONLINEUSERID) as userid, " +
+			"count(iif(dsx.isfree = 0 and dsx.end_time >= current_time and " +
+			"    (exists (select null from dailyplandet where did = p.did and schid in (990054338,990054339,990054340,990054352)) or " +
+			"    exists  (select null from scheduledet where schedid = dsx.schedid and schid in (990054338,990054339,990054340,990054352))), 1, null)) last_pac_day, " +
+			"count(iif(dsx.isfree = 0 and dsx.end_time >= current_time - 1800 and dsx.beg_time <= current_time + 7200 and " +
+			"    (exists (select null from dailyplandet where did = p.did and schid in (990054338,990054339,990054340,990054352)) or " +
+			"    exists  (select null from scheduledet where schedid = dsx.schedid and schid in (990054338,990054339,990054340,990054352))), 1, null)) last_pac_2hours " +
+			"from ( " +
+			"    select " +
+			"    ds.dcode, " +
+			"    ds.filial, " +
+			"    ds.depnum, " +
+			"    ds.wdate, " +
+			"    sx.SCHEDID, " +
+			"    sx.isfree, " +
+			"    cast('00:00' as time) + (sx.bhour * 3600 + sx.bmin * 60) beg_time, " +
+			"    cast('00:00' as time) + (sx.fhour * 3600 + sx.fmin * 60) end_time, " +
+			"    cast('00:00' as time) + (ds.beghour * 3600 + ds.begmin * 60) beg_doc_time, " +
+			"    cast('00:00' as time) + (ds.endhour * 3600 + ds.endmin * 60) end_doc_time " +
+			"    from doctshedule ds " +
+			"    left join sched_intervals(ds.schedident, 990002986) sx on 1=1 " +
+			"    where ds.wdate = current_date and " +
+			"        ds.daytype = 1 " +
+			"  ) dsx " +
+			"join departments dep on dep.depnum = dsx.depnum " +
+			"join schedule s on s.schedid = dsx.schedid " +
+			"left join dailyplan p on p.did = s.planid and p.PLANTYPE = 204 " +
+			"join doctor d on d.dcode = dsx.dcode and char_length(d.ONLINEUSERID) > 3 " +
+			"group by 1";
 	}
 }

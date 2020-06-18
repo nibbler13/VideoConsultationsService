@@ -1,11 +1,14 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Data;
+using System.Diagnostics;
 using System.Linq;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Timers;
 using VideoConsultationsService.TrueConfObjects;
+using Timer = System.Timers.Timer;
 
 namespace VideoConsultationsService {
 	class EventSystem {
@@ -30,6 +33,7 @@ namespace VideoConsultationsService {
 
 		public EventSystem(bool isZabbixCheck = false) {
 			trueConf = new TrueConf();
+
 			this.isZabbixCheck = isZabbixCheck;
 			previousDay = DateTime.Now.Day;
 
@@ -40,6 +44,9 @@ namespace VideoConsultationsService {
 
 			if (isZabbixCheck)
 				Logging.ToLog("Проверка Zabbix");
+
+			if (Debugger.IsAttached)
+				DisconnectUsers();
 		}
 
 		public void CheckForNewEvents() {
@@ -67,8 +74,12 @@ namespace VideoConsultationsService {
 					if (list.Count > 10)
 						list.RemoveRange(0, list.Count - 10);
 
-				DisconnectUsers();
 				previousDay = DateTime.Now.Day;
+			}
+
+			if (DateTime.Now.Minute % 10 == 0) {
+				Thread thread = new Thread(DisconnectUsers);
+				thread.Start();
 			}
 
 			CheckTrueConfEvents();
@@ -473,15 +484,78 @@ namespace VideoConsultationsService {
 		private void DisconnectUsers() {
 			Logging.ToLog("Получение списка пользователей TrueConf");
 			try {
-				List<ObjectUser> userList = trueConf.GetUserList().Result;
-				Logging.ToLog("Пользователей в списке: " + userList.Count);
+				List<ObjectUser> userListTC = trueConf.GetUserList().Result;
+				Logging.ToLog("Пользователей в списке: " + userListTC.Count);
 				int[] statusToDisconnect = new int[] { 1, 2, 5 };
-				List<ObjectUser> userToDisconnectList = userList.Where(x => statusToDisconnect.Contains(x.Status)).ToList();
+				List<ObjectUser> userToDisconnectList = userListTC.Where(x => statusToDisconnect.Contains(x.Status)).ToList();
 				Logging.ToLog("Пользователей со статусом ONLINE, BUSY, MULTIHOST: " + userToDisconnectList.Count);
-				foreach (ObjectUser user in userToDisconnectList) {
-					Logging.ToLog("Отключение пользователя: " + user.Id);
-					Logging.ToLog("Усешно?: " + trueConf.DisconnectUser(user.Id).Result);
+				Logging.ToLog(string.Join("; ", userToDisconnectList.Select(x => x.Id)));
+
+				int maxOnlineUsers = Properties.Settings.Default.MaxTrueConfOnlineUsers;
+				int currentOnlineUsers = userToDisconnectList.Count;
+				if (currentOnlineUsers <= maxOnlineUsers) {
+					Logging.ToLog("Кол-во онлайн пользователей не превышает максимально допустимое кол-во (" 
+						+ maxOnlineUsers + "). Пропуск отключения пользователей");
+					return;
 				}
+
+				Logging.ToLog("Получение списка пользователей МИС Инфоклиника");
+				DataTable userListMIS = fbClient.GetDataTable(
+					DbQueries.GetTelemedicineUserList, 
+					new Dictionary<string, string>(), 
+					ref errorMisFbCount, 
+					ref fbClientErrorSendedToStp);
+
+				Logging.ToLog("Получено строк: " + userListMIS.Rows.Count);
+
+				foreach (ObjectUser user in userToDisconnectList) {
+					try {
+						string userId = user.Id;
+
+						DataRow[] selectResultByUser = userListMIS.Select("USERID = '" + userId + "'");
+						if (selectResultByUser.Length == 0) {
+							Logging.ToLog("Пользователь отсутствует в списке докторов МИС, " +
+								"ведущих прием телемедицины, отключение. UserID: " + userId);
+							Logging.ToLog("Успешно?: " + trueConf.DisconnectUser(userId).Result);
+							currentOnlineUsers--;
+
+							if (currentOnlineUsers <= maxOnlineUsers)
+								break;
+
+							continue;
+						}
+
+						int clientsToday = int.Parse(selectResultByUser[0]["LAST_PAC_DAY"].ToString());
+						if (clientsToday == 0) {
+							Logging.ToLog("У сотрудника нет пациентов на телемедицину на сегодняшний день, отключение. UserID: " + userId);
+							Logging.ToLog("Успешно?: " + trueConf.DisconnectUser(userId).Result);
+							currentOnlineUsers--;
+
+							if (currentOnlineUsers <= maxOnlineUsers)
+								break;
+
+							continue;
+						}
+
+						int clientIn2Hours = int.Parse(selectResultByUser[0]["LAST_PAC_2HOURS"].ToString());
+						if (clientIn2Hours == 0) {
+							Logging.ToLog("У сотрудника нет пациентов на телемедицину на ближайшие 2 часа, отключение. UserID: " + userId);
+							Logging.ToLog("Успешно?: " + trueConf.DisconnectUser(userId).Result);
+							currentOnlineUsers--;
+
+							if (currentOnlineUsers <= maxOnlineUsers)
+								break;
+
+							continue;
+						}
+
+						Logging.ToLog("У пользователя имеются приемы телемедицины на ближайшее время. UserID: " + userId);
+					} catch (Exception exc) {
+						Logging.ToLog(exc.Message + Environment.NewLine + exc.StackTrace);
+					}
+				}
+
+				Logging.ToLog("Количество онлайн пользователей после отключения: " + currentOnlineUsers);
 			} catch (Exception e) {
 				Logging.ToLog(e.Message + Environment.NewLine + e.StackTrace);
 			}

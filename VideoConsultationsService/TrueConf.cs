@@ -73,6 +73,7 @@ namespace VideoConsultationsService {
 
 
 		public async Task<bool> DisconnectUser(string id) {
+			Logging.ToLog("Отключение пользователя: " + id);
 			string url = rootUrl + apiDisconnectUser.Replace("{secret_key}", secretKey).Replace("{user_id}", id);
 			StringContent stringContent = new StringContent(JsonConvert.SerializeObject(string.Empty), Encoding.UTF8, "application/json");
 			HttpResponseMessage response = await httpClient.PostAsync(url, stringContent);
