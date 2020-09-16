@@ -1,9 +1,9 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio 15
-VisualStudioVersion = 15.0.26430.14
+# Visual Studio Version 16
+VisualStudioVersion = 16.0.30503.244
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "VideoConsultationsService", "VideoConsultationsService\VideoConsultationsService.csproj", "{A63B1F67-8378-4730-895F-CD2723F5165B}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SmsNotificationService", "SmsNotificationService\SmsNotificationService.csproj", "{A63B1F67-8378-4730-895F-CD2723F5165B}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -18,5 +18,8 @@ Global
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {8834DE76-2DA2-4D67-AF84-CD3D59EB6CA6}
 	EndGlobalSection
 EndGlobal

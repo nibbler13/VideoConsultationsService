@@ -6,7 +6,7 @@ using System.Runtime.CompilerServices;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace VideoConsultationsService {
+namespace SmsNotificationService {
 	public class ItemPhoneNumber : INotifyPropertyChanged {
 		public event PropertyChangedEventHandler PropertyChanged;
 		private void NotifyPropertyChanged([CallerMemberName] String propertyName = "") {

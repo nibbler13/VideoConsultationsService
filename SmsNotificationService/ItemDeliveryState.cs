@@ -4,7 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace VideoConsultationsService {
+namespace SmsNotificationService {
 	class ItemDeliveryState {
 		public bool IsSuccessStatusCode { get; set; }
 		public DateTime? DateTimeDelivery { get; private set; }

@@ -7,9 +7,9 @@ using System.Net.Http;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading.Tasks;
-using VideoConsultationsService.TrueConfObjects;
+using SmsNotificationService.TrueConfObjects;
 
-namespace VideoConsultationsService {
+namespace SmsNotificationService {
 	class TrueConf {
 		private static readonly HttpClient httpClient = new HttpClient();
 		private const string rootUrl = "https://portal2.bzklinika.ru";

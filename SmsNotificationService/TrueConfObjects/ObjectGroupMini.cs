@@ -5,7 +5,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace VideoConsultationsService.TrueConfObjects {
+namespace SmsNotificationService.TrueConfObjects {
 	public class ObjectGroupMini {
 		/*
 		v.3.1

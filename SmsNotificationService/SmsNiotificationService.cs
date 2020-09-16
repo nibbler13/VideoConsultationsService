@@ -6,19 +6,19 @@ using System.Text;
 using System.Threading.Tasks;
 using System.Threading;
 
-namespace VideoConsultationsService {
-	static class VideoConsultationsService {
+namespace SmsNotificationService {
+	static class SmsNiotificationService {
 		public class Service : ServiceBase {
 			public Service() {
 
 			}
 
 			protected override void OnStart(string[] args) {
-				VideoConsultationsService.Start();
+				SmsNiotificationService.Start();
 			}
 
 			protected override void OnStop() {
-				VideoConsultationsService.Stop();
+				SmsNiotificationService.Stop();
 			}
 		}
 

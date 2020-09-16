@@ -2,9 +2,9 @@
 using System.IO;
 using System.Linq;
 
-namespace VideoConsultationsService {
+namespace SmsNotificationService {
 	public class Logging {
-		private const string LOG_FILE_NAME = "VideoConsultationsService_*.log";
+		private const string LOG_FILE_NAME = "SmsNotificationService_*.log";
 		private const int MAX_LOGFILES_QUANTITY = 7;
 
 		public static void ToLog(string msg, bool writeToConsole = true) {

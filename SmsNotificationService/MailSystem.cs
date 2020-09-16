@@ -6,9 +6,9 @@ using System.Reflection;
 using System.Net.Mime;
 using System.IO;
 
-namespace VideoConsultationsService {
+namespace SmsNotificationService {
 	class MailSystem {
-		public enum ErrorType { FireBird, TrueConf, CheckStateError, SingleCheck }
+		public enum ErrorType { FireBird, Vertica, TrueConf, CheckStateError, SingleCheck }
 
 		public static string SendErrorMessageToStp (ErrorType errorType, string errorMessage = "") {
 				string subject = "Ошибки в работе VideoConsultationsSevice";
@@ -22,20 +22,30 @@ namespace VideoConsultationsService {
 							" данные с сервера FireBird " + Properties.Settings.Default.FbMisAddress + ":" +
 							Properties.Settings.Default.FbMisName + " в течение длительного периода";
 						break;
+
 					case ErrorType.TrueConf:
 						body = "Сервису VideoConsultationsSevice не удалось корректно загрузить" +
 							" данные с сервера TrueConf в течение длительного периода";
 						break;
+
 					case ErrorType.CheckStateError:
 						body += "В ходе проверки состояния сервера TrueConf возникла ошибка: " +
 							Environment.NewLine + errorMessage;
 						break;
+
 					case ErrorType.SingleCheck:
 						body = errorMessage;
 						address = Properties.Settings.Default.MailToSingleCheck;
 						subject = "Результаты проверки сервера TrueConf - "  + 
 							(errorMessage.Contains("!") ? " Внимание! Обнаружены ошибки!" : "ошибок не обнаружено");
 						break;
+
+					case ErrorType.Vertica:
+						body += "Сервису VideoConsultationsSevice не удалось корректно загрузить" +
+							" данные с сервера Vertica " + Properties.Settings.Default.VerticaDbAddress + ":" +
+							Properties.Settings.Default.VerticaDbName + " в течение длительного периода";
+						break;
+
 					default:
 						break;
 				}

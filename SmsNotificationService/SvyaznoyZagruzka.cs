@@ -6,7 +6,7 @@ using System.Net.Http;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace VideoConsultationsService {
+namespace SmsNotificationService {
 	class SvyaznoyZagruzka {
 		public async static Task<ItemSendResult> SendMessage(string phoneNumber, string message, DateTime? dateTime = null) {
 			Logging.ToLog("Отправка СМС для абонента " + phoneNumber + " со следующим текстом: " + message);

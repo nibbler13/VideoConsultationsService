@@ -5,7 +5,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace VideoConsultationsService.TrueConfObjects {
+namespace SmsNotificationService.TrueConfObjects {
 	public class ObjectSchedule {
 		//v.3.1
 		//Field			Type		Description

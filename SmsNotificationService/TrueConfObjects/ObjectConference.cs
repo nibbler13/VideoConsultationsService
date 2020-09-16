@@ -5,7 +5,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace VideoConsultationsService.TrueConfObjects {
+namespace SmsNotificationService.TrueConfObjects {
 	public class Conferences {
 		[JsonProperty("cnt")]
 		public int Count { get; set; }

@@ -3,7 +3,7 @@ using System.Data;
 using System.Collections.Generic;
 using FirebirdSql.Data.FirebirdClient;
 
-namespace VideoConsultationsService {
+namespace SmsNotificationService {
     class FBClient {
         private FbConnection connection;
 		private bool isZabbixCheck;
@@ -31,16 +31,17 @@ namespace VideoConsultationsService {
 
 			try {
 				connection.Open();
-				FbCommand command = new FbCommand(query, connection);
-				
-				if (parameters.Count > 0)
-					foreach (KeyValuePair<string, string> parameter in parameters)
-						command.Parameters.AddWithValue(parameter.Key, parameter.Value);
+				using (FbCommand command = new FbCommand(query, connection)) {
+					if (parameters.Count > 0)
+						foreach (KeyValuePair<string, string> parameter in parameters)
+							command.Parameters.AddWithValue(parameter.Key, parameter.Value);
 
-				FbDataAdapter fbDataAdapter = new FbDataAdapter(command);
-				fbDataAdapter.Fill(dataTable);
-				errorCounter = 0;
-				sendedToStp = false;
+					using (FbDataAdapter fbDataAdapter = new FbDataAdapter(command))
+						fbDataAdapter.Fill(dataTable);
+
+					errorCounter = 0;
+					sendedToStp = false;
+				}
 			} catch (Exception e) {
 				Logging.ToLog("Не удалось получить данные, запрос: " + query + 
 					Environment.NewLine + e.Message + " @ " + e.StackTrace, !isZabbixCheck);

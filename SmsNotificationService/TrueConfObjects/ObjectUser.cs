@@ -5,7 +5,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace VideoConsultationsService.TrueConfObjects {
+namespace SmsNotificationService.TrueConfObjects {
 	public class Users {
 		[JsonProperty("next_page_id")]
 		public int NextPageId { get; set; }

@@ -5,11 +5,11 @@ using System.Runtime.InteropServices;
 // Общие сведения об этой сборке предоставляются следующим набором
 // набора атрибутов. Измените значения этих атрибутов, чтобы изменить сведения,
 // связанные со сборкой.
-[assembly: AssemblyTitle("VideoConsultationsService")]
+[assembly: AssemblyTitle("SmsNotificationService")]
 [assembly: AssemblyDescription("Приложение для отправки уведомлений для телемедицины")]
 [assembly: AssemblyConfiguration("")]
 [assembly: AssemblyCompany("ООО Клиника ЛМС")]
-[assembly: AssemblyProduct("VideoConsultationsService")]
+[assembly: AssemblyProduct("SmsNotificationService")]
 [assembly: AssemblyCopyright("nn-admin ©  2017")]
 [assembly: AssemblyTrademark("")]
 [assembly: AssemblyCulture("")]
