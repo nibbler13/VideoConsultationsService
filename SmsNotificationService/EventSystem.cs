@@ -24,16 +24,19 @@ namespace SmsNotificationService {
 		private uint errorTrueConfServerCountByTimer = 0;
 		private uint errorMisFbCount = 0;
 		private uint errorVerticaDbCount = 0;
+		private uint errorNewFileCallCenter = 0;
 		private bool mailSystemErrorSendedToStp = false;
 		private bool fbClientErrorSendedToStp = false;
 		private bool verticaClientErrorSendedToStp = false;
 		private bool trueConfServerErrorSendedToStp = false;
+		private bool fileCallCenterSendedToStp = false;
 		private List<string> sendedWebinars = new List<string>();
 		private List<string> sendedScheduleEvents = new List<string>();
 		private List<string> sendedRemindersEvents = new List<string>();
 		private List<string> sendedRemindersDocsEvents = new List<string>();
 		private List<string> sendedNewPaymentNotification = new List<string>();
 		private List<string> sendedPayment30minNotification = new List<string>();
+		private List<string> sendedFileCallCenterNotification = new List<string>();
 
 		//pcode
 		private List<string> sendedRateSurveyNotificationToday = new List<string>();
@@ -85,7 +88,7 @@ namespace SmsNotificationService {
 			}
 
 			if (Debugger.IsAttached)
-				CheckRateSurveyNotifications();
+				CheckNewFilesInFoldersPndCallCenter();
 		}
 
 		public void CheckForNewEvents() {
@@ -107,7 +110,9 @@ namespace SmsNotificationService {
 					sendedRemindersEvents,
 					sendedRemindersDocsEvents,
 					sendedNewPaymentNotification,
-					sendedPayment30minNotification};
+					sendedPayment30minNotification,
+					sendedFileCallCenterNotification
+				};
 
 				foreach (List<string> list in sendedEarlier)
 					if (list.Count > 10)
@@ -125,11 +130,15 @@ namespace SmsNotificationService {
 
 				Thread thread2 = new Thread(CheckRateSurveyNotifications);
 				thread2.Start();
+
+				Thread thread3 = new Thread(CheckNewFilesInFoldersPndCallCenter);
+				thread3.Start();
 			}
 
 			if (!Debugger.IsAttached) {
 				CheckTrueConfEvents();
 				CheckMisEvents();
+				//CheckNewFilesInFoldersPndCallCenter();
 			}
 		}
 
@@ -709,7 +718,10 @@ namespace SmsNotificationService {
 
 								Logging.ToLog(skipText);
 								row["accepted_to_send"] = "0";
-								schedidChecked.Add(schedid);
+
+								//3 - отправка будет позднее в этот же день
+								if (hasToBeSkipped != 3)
+									schedidChecked.Add(schedid);
 							}
 
 							continue;
@@ -786,6 +798,76 @@ namespace SmsNotificationService {
 				fbClient.ExecuteUpdateQuery(DbQueries.sqlInsertSmsSendInfo, param);
 			} catch (Exception e) {
 				Logging.ToLog(e.Message + Environment.NewLine + e.StackTrace);
+			}
+		}
+
+
+		private void CheckNewFilesInFoldersPndCallCenter() {
+			Logging.ToLog("---Проверка новых файлов заявок ПНД для КЦ");
+
+			string pathToCheck = @"\\mskzk-fs-01\PND\";
+
+			string[] emails = new string[] {
+				"pnd.zayavka@bzklinika.ru"
+			};
+
+			//string[] phoneNumbers = new string[] {
+			//	"79506145587",
+			//	"79875535061",
+			//	"79107991396"
+			//};
+
+			bool hasError = false;
+			Dictionary<string, string> newFiles = new Dictionary<string, string>();
+			try {
+				if (Directory.Exists(pathToCheck)) {
+					string[] files = Directory.GetFiles(pathToCheck);
+					foreach (string file in files) {
+						if (sendedFileCallCenterNotification.Contains(file))
+							continue;
+
+						DateTime creationTime = File.GetCreationTime(file);
+						if ((DateTime.Now - creationTime).TotalMinutes > 120) 
+							continue;
+
+						newFiles.Add(file, creationTime.ToString("yyyy.MM.dd HH:mm:ss"));
+						sendedFileCallCenterNotification.Add(file);
+					}
+				} else {
+					Logging.ToLog("Не удается получить доступ к папке: " + pathToCheck);
+					hasError = true;
+				}
+			} catch (Exception e) {
+				Logging.ToLog(e.Message + Environment.NewLine + e.StackTrace);
+				hasError = true;
+			}
+
+			if (newFiles.Count > 0) {
+				string body = "В папке <a href=\"" + pathToCheck + "\">" + pathToCheck + "</a> появился новый файл(ы): <br>";
+				foreach (KeyValuePair<string, string> file in newFiles) 
+					body += "<a href=\"" + file.Key + "\">" + Path.GetFileName(file.Key) + "</a>, время создания: " + file.Value + "<br>";
+
+				foreach (string email in emails)
+					MailSystem.SendMail("Новая заявка ПНД от Ингосстрах", body, email);
+
+				//foreach (string phoneNumber in phoneNumbers)
+				//	SvyaznoyZagruzka.SendMessage(phoneNumber, "Появилась новая заявка ПНД ИГС").Wait();
+			}
+
+			if (!hasError) {
+				errorNewFileCallCenter = 0;
+				fileCallCenterSendedToStp = false;
+			} else {
+				if (errorNewFileCallCenter > 10) {
+					if (!fileCallCenterSendedToStp) {
+						MailSystem.SendErrorMessageToStp(MailSystem.ErrorType.CallCenterPndFiles);
+						fileCallCenterSendedToStp = true;
+					}
+
+					return;
+				};
+				
+				errorNewFileCallCenter++;
 			}
 		}
 	}

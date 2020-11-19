@@ -8,23 +8,23 @@ using System.IO;
 
 namespace SmsNotificationService {
 	class MailSystem {
-		public enum ErrorType { FireBird, Vertica, TrueConf, CheckStateError, SingleCheck }
+		public enum ErrorType { FireBird, Vertica, TrueConf, CheckStateError, SingleCheck, CallCenterPndFiles }
 
 		public static string SendErrorMessageToStp (ErrorType errorType, string errorMessage = "") {
-				string subject = "Ошибки в работе VideoConsultationsSevice";
+				string subject = "Ошибки в работе SmsNotificationService";
 				string body = "На группу бизнес-анализа" + Environment.NewLine;
 
 			try {
 				string address = Properties.Settings.Default.MailStpAddress;
 				switch (errorType) {
 					case ErrorType.FireBird:
-						body += "Сервису VideoConsultationsSevice не удалось корректно загрузить" +
+						body += "Сервису SmsNotificationService не удалось корректно загрузить" +
 							" данные с сервера FireBird " + Properties.Settings.Default.FbMisAddress + ":" +
 							Properties.Settings.Default.FbMisName + " в течение длительного периода";
 						break;
 
 					case ErrorType.TrueConf:
-						body = "Сервису VideoConsultationsSevice не удалось корректно загрузить" +
+						body = "Сервису SmsNotificationService не удалось корректно загрузить" +
 							" данные с сервера TrueConf в течение длительного периода";
 						break;
 
@@ -41,9 +41,13 @@ namespace SmsNotificationService {
 						break;
 
 					case ErrorType.Vertica:
-						body += "Сервису VideoConsultationsSevice не удалось корректно загрузить" +
+						body += "Сервису SmsNotificationService не удалось корректно загрузить" +
 							" данные с сервера Vertica " + Properties.Settings.Default.VerticaDbAddress + ":" +
 							Properties.Settings.Default.VerticaDbName + " в течение длительного периода";
+						break;
+
+					case ErrorType.CallCenterPndFiles:
+						body += "Сервису SmsNotificationService не удалось получить доступ к папкам заявок ПНД ИГС";
 						break;
 
 					default:
